@@ -10,6 +10,7 @@ import {
   Settings,
   Sun,
   Swords,
+  TrendingUp,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { to: "/", icon: Brain, label: "Agents" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
   { to: "/trade", icon: Swords, label: "Trade" },
+  { to: "/microduck", icon: TrendingUp, label: "MICRODUCK" },
   { to: "/dex", icon: Droplets, label: "DEX" },
   { to: "/bots", icon: Bot, label: "Bots" },
   { to: "/executors", icon: Activity, label: "Executors" },
@@ -67,11 +69,12 @@ function AppShellBody() {
   // — while `/agents/:slug` is an ordinary padded page, deliberately not
   // matched here.
   const isChatWorkspace = pathname === "/";
+  const isFullHeightWorkspace = isChatWorkspace || pathname === "/microduck";
 
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/routines", "/settings"];
+  const exemptRoutes = ["/routines", "/settings", "/microduck"];
   const showKeysOverlay =
     server && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));
@@ -185,7 +188,7 @@ function AppShellBody() {
       {/* Main content */}
       <main
         className={`relative flex-1 ${
-          isChatWorkspace ? "overflow-hidden" : "overflow-auto p-6"
+          isFullHeightWorkspace ? "overflow-hidden" : "overflow-auto p-6"
         }`}
       >
         <ErrorBoundary resetKey={pathname + server}>

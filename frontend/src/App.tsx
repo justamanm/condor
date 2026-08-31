@@ -15,6 +15,7 @@ import { Dex } from "@/pages/Dex";
 import { DexPool } from "@/pages/DexPool";
 import { Executors } from "@/pages/Executors";
 import { Login } from "@/pages/Login";
+import { Microduck } from "@/pages/Microduck";
 import { Portfolio } from "@/pages/Portfolio";
 import { Routines } from "@/pages/Routines";
 import { Settings } from "@/pages/Settings";
@@ -73,6 +74,7 @@ export default function App() {
                 <Route path="/bots" element={<Bots />} />
                 <Route path="/bots/:id" element={<BotDetail />} />
                 <Route path="/trade" element={<CreateExecutor />} />
+                <Route path="/microduck" element={<Microduck />} />
             <Route path="/dex" element={<Dex />} />
             <Route path="/dex/:network/:address" element={<DexPool />} />
                 <Route path="/executors" element={<Executors />} />
