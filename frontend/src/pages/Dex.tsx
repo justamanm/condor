@@ -37,8 +37,9 @@ const DEFAULT_NETWORK = "solana-mainnet-beta";
 /** Survives a reload, so the chain you browse is not re-picked on every visit. */
 const NETWORK_KEY = "condor.dex.network";
 
-/** An EVM address or a Solana pubkey — the same guard the backend applies. */
-const ADDRESS_RE = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/;
+/** A pool contract, Solana pubkey or Uniswap v4's 32-byte pool id. */
+const POOL_ADDRESS_RE =
+  /^(0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})|[1-9A-HJ-NP-Za-km-z]{32,44})$/;
 
 /**
  * Browse pools, because on Gateway the pool *is* the decision.
@@ -129,7 +130,7 @@ export function Dex() {
   });
 
   const isSearch = source.kind === "gecko" && source.view === "token";
-  const isAddress = ADDRESS_RE.test(debouncedQuery);
+  const isPoolAddress = POOL_ADDRESS_RE.test(debouncedQuery);
   // The query text only reaches the request for gateway sources and the token
   // search view; keying other views on it would refetch a byte-identical
   // listing (and spend GeckoTerminal budget) when leftover text sits in the
@@ -140,7 +141,7 @@ export function Dex() {
   const enabled =
     !!server &&
     source.kind !== "favorites" &&
-    (source.kind === "gateway" || !isSearch || isAddress);
+    (source.kind === "gateway" || !isSearch || !!debouncedQuery);
 
   const {
     data: pagedPools,
@@ -196,19 +197,8 @@ export function Dex() {
   const { data: pastedPool } = useQuery({
     queryKey: ["dex-pool-by-address", server, network, debouncedQuery],
     queryFn: () =>
-      api.getDexPoolByAddress(server!, debouncedQuery, network).catch((e: Error) => {
-        // A pasted *token* address 404s here by design — the token search
-        // running alongside is the lookup that resolves it — so not-found is a
-        // soft null, not an error. Everything else (throttle 503, network)
-        // must stay an error: this cache key is shared with DexPool, and a
-        // null recorded as success renders its "No pool at …" dead-end there
-        // with the Retry button hidden.
-        if (/pool not found|request failed: 404/i.test(e.message)) {
-          return null as PoolSummary | null;
-        }
-        throw e;
-      }),
-    enabled: !!server && isSearch && isAddress,
+      api.findDexPoolByAddress(server!, debouncedQuery, network),
+    enabled: !!server && isSearch && isPoolAddress,
     staleTime: POOL_STALE_MS,
     retry: false,
   });
@@ -321,10 +311,8 @@ export function Dex() {
     ? throttledPage
       ? "GeckoTerminal is rate limiting Condor — your favorites will reappear in a moment."
       : "No favorites yet — star a pool to keep it here."
-    : isSearch && !isAddress
-      ? debouncedQuery
-        ? "That is not a pool or token address."
-        : "Paste a pool or token address to find it."
+    : isSearch && !debouncedQuery
+      ? "Search by name, symbol, token address or pool address."
       : throttledPage || upstream.limited
         ? "GeckoTerminal is rate limiting Condor — no pools could be read. This clears on its own in a few seconds."
         : "No pools found.";

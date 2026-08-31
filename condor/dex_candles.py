@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 # values that reach GeckoTerminal as URL path segments, and tells a real address
 # apart from a plain ticker like "BTC".
 ADDRESS_RE = re.compile(r"^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$")
+# A Uniswap v4 pool is identified by a 32-byte pool id rather than a 20-byte
+# contract address. Keep that form pool-only: it is not a token address and must
+# never be accepted where Gateway expects a mint or contract.
+POOL_ADDRESS_RE = re.compile(
+    r"^(0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})|[1-9A-HJ-NP-Za-km-z]{32,44})$"
+)
 
 
 def uses_gecko_candles(connector: str) -> bool:

@@ -258,7 +258,7 @@ export function PoolSourceTabs({
   const searchLabel =
     source.kind === "gateway"
       ? "Filter pools by name…"
-      : "Paste a pool or token address…";
+      : "Search name, symbol, token or pool address…";
   const searchShown = source.kind === "gateway" || isSearch;
   const showGatewayTabs = network.startsWith(GATEWAY_TAB_CHAIN);
 

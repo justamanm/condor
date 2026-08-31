@@ -1664,20 +1664,39 @@ async def _gecko_page_fetch(
     key: Tuple,
 ) -> Optional[List[Dict[str, Any]]]:
     """The uncached fetch behind ``_gecko_page_rows``. One upstream request."""
+    from condor.dex_candles import ADDRESS_RE
+
+    text_search = view == "token" and not ADDRESS_RE.fullmatch(token)
     if dex:
         path = GECKO_CONSTANTS.GET_TOP_POOLS_BY_NETWORK_DEX_PATH.format(gnet, dex)
     elif view == "token":
-        path = GECKO_CONSTANTS.GET_TOP_POOLS_BY_NETWORK_TOKEN_PATH.format(gnet, token)
+        path = (
+            "search/pools"
+            if text_search
+            else GECKO_CONSTANTS.GET_TOP_POOLS_BY_NETWORK_TOKEN_PATH.format(gnet, token)
+        )
     else:
         path = _GECKO_VIEW_PATHS[view].format(gnet)
 
     try:
-        payload = await gecko_request("GET", path, params={"page": page})
-        rows = [
-            row
-            for row in glom(payload, GECKO_CONSTANTS.POOL_SPEC)
-            if isinstance(row, dict)
-        ]
+        params = (
+            {"query": token, "network": gnet, "page": page}
+            if text_search
+            else {"page": page}
+        )
+        payload = await gecko_request("GET", path, params=params)
+        if text_search:
+            rows = [
+                _flatten_search_pool(row)
+                for row in (payload.get("data") or [])
+                if isinstance(row, dict)
+            ]
+        else:
+            rows = [
+                row
+                for row in glom(payload, GECKO_CONSTANTS.POOL_SPEC)
+                if isinstance(row, dict)
+            ]
     except Exception as e:
         # Every rate-limit reply, and the 401 gecko answers past page 10.
         # A stale copy beats an empty table: this listing is a ranked snapshot, so
@@ -1781,14 +1800,12 @@ async def list_gecko_pools_page(
     ``has_more`` is answered from what the walk saw, not guessed from a full page:
     a Next that lands on nothing is worse than no Next at all.
     """
-    from condor.dex_candles import ADDRESS_RE
-
     gnet = get_gecko_network(network)
     view = (view or "trending").strip().lower()
     if view not in GECKO_POOL_VIEWS:
         view = "trending"
     token = (token or "").strip()
-    if view == "token" and not ADDRESS_RE.match(token):
+    if view == "token" and not token:
         return {"pools": [], "has_more": False}
     limit = _clamp_pool_limit(limit)
     try:
@@ -1921,13 +1938,13 @@ async def fetch_pools_by_addresses(
     the table. Addresses that resolve to nothing are simply absent from the answer
     — a pool that has since been dropped from the index is not an error.
     """
-    from condor.dex_candles import ADDRESS_RE
+    from condor.dex_candles import POOL_ADDRESS_RE
 
     gnet = get_gecko_network(network)
     seen: List[str] = []
     for address in addresses:
         address = str(address or "").strip()
-        if address and ADDRESS_RE.match(address) and address not in seen:
+        if address and POOL_ADDRESS_RE.fullmatch(address) and address not in seen:
             seen.append(address)
     if not seen:
         return []
@@ -2212,10 +2229,10 @@ async def fetch_pool_by_address(
     looked up in a list. A pool that genuinely does not exist is cached as such;
     a failed lookup is not.
     """
-    from condor.dex_candles import ADDRESS_RE
+    from condor.dex_candles import POOL_ADDRESS_RE
 
     pool_address = (pool_address or "").strip()
-    if not ADDRESS_RE.match(pool_address):
+    if not POOL_ADDRESS_RE.fullmatch(pool_address):
         return None
 
     gnet = get_gecko_network(network)

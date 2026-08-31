@@ -22,6 +22,9 @@ from condor.web.models import WebUser
 POOL = "8sLbNZoA1cfnvMJLPfp98ZLAnFSYCFApfJKMbiXNLwxj"
 SOL = "So11111111111111111111111111111111111111112"
 USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+V4_POOL = "0x" + "ab" * 32
+MICRODUCK = "0xd5f1afea47b1a9eab414d2ee740cf1d6d039e725"
+NVDA = "0x" + "cd" * 20
 
 
 def run(coro):
@@ -169,8 +172,14 @@ class FakeGecko:
 
     async def api_request(self, method, path, params=None):
         parts = path.split("/")
-        network = parts[1]
-        if parts[-1] == "dexes":
+        if path == "search/pools":
+            network = (params or {}).get("network", "")
+            self.calls.append(("search", network, (params or {}).get("query", "")))
+        else:
+            network = parts[1]
+        if path == "search/pools":
+            pass
+        elif parts[-1] == "dexes":
             self.calls.append(("dexes", network))
         elif parts[-2] == "tokens" or (len(parts) > 3 and parts[2] == "tokens"):
             self.calls.append(("token", network, parts[3]))
@@ -364,11 +373,12 @@ def test_unknown_view_falls_back_to_trending(fake_gecko):
     assert client.calls[0][0] == "trending"
 
 
-def test_token_view_requires_a_real_address(fake_gecko):
+def test_token_view_accepts_a_symbol_search(fake_gecko):
     client = fake_gecko(pd.DataFrame([gecko_row()]))
-    assert run(pool_data.list_gecko_pools("solana", view="token", token="SOL")) == []
+    pools = run(pool_data.list_gecko_pools("solana", view="token", token="SOL"))
+    assert pools[0]["base_symbol"] == "SOL"
     assert run(pool_data.list_gecko_pools("solana", view="token", token="")) == []
-    assert client.calls == [], "a ticker must never reach a URL path segment"
+    assert client.calls == [("search", "solana", "SOL")]
 
 
 def test_token_view_passes_the_mint_through(fake_gecko):
@@ -626,11 +636,12 @@ def test_gecko_source_lists_pools(route_client, fake_gecko):
     assert body["pools"][0]["lp_supported"] is True
 
 
-def test_gecko_token_view_rejects_a_ticker(route_client, fake_gecko):
+def test_gecko_token_view_accepts_a_ticker(route_client, fake_gecko):
     client = fake_gecko(pd.DataFrame([gecko_row()]))
     r = route_client().get("/servers/srv/dex/pools?source=gecko&view=token&query=SOL")
-    assert r.status_code == 400
-    assert client.calls == []
+    assert r.status_code == 200
+    assert r.json()["pools"][0]["base_symbol"] == "SOL"
+    assert client.calls == [("search", "solana", "SOL")]
 
 
 def test_gecko_token_view_accepts_a_mint(route_client, fake_gecko):
@@ -640,6 +651,38 @@ def test_gecko_token_view_accepts_a_mint(route_client, fake_gecko):
     )
     assert r.status_code == 200
     assert client.calls[0] == ("token", "solana", SOL)
+
+
+def test_gecko_search_view_accepts_a_token_name(route_client, monkeypatch):
+    """Search is a search box, not an undocumented address-only field."""
+
+    row = api_row(
+        {
+            **gecko_row(
+                dex_id="uniswap-v4-robinhood",
+                name="MICRODUCK / NVDA",
+                address=V4_POOL,
+            ),
+            "id": f"robinhood_{V4_POOL}",
+            "base_token_id": MICRODUCK,
+            "quote_token_id": NVDA,
+        }
+    )
+
+    async def fake_request(method, path, params=None):
+        assert (method, path) == ("GET", "search/pools")
+        assert params["query"] == "microduck"
+        assert params["network"] == "robinhood"
+        return {"data": [row]}
+
+    monkeypatch.setattr(pool_data, "gecko_request", fake_request)
+    r = route_client().get(
+        "/servers/srv/dex/pools"
+        "?source=gecko&network=ethereum-robinhoodchain"
+        "&view=token&query=microduck"
+    )
+    assert r.status_code == 200
+    assert r.json()["pools"][0]["address"] == V4_POOL
 
 
 def test_gateway_source_lists_pools(route_client):
@@ -688,6 +731,15 @@ def test_pool_by_address_renders_from_the_url_alone(route_client, fake_gecko):
     assert pool["gateway_network"] == "solana-mainnet-beta"
 
 
+def test_uniswap_v4_pool_id_renders_from_the_url(route_client, fake_gecko):
+    fake_gecko(pd.DataFrame([gecko_row(address=V4_POOL)]))
+    r = route_client().get(
+        f"/servers/srv/dex/pools/{V4_POOL}?network=ethereum-robinhoodchain"
+    )
+    assert r.status_code == 200
+    assert r.json()["address"] == V4_POOL
+
+
 def test_pool_by_address_rejects_a_non_address(route_client, fake_gecko):
     client = fake_gecko(pd.DataFrame([gecko_row()]))
     assert (
@@ -699,6 +751,13 @@ def test_pool_by_address_rejects_a_non_address(route_client, fake_gecko):
 def test_unknown_pool_is_a_404(route_client, fake_gecko):
     fake_gecko(pd.DataFrame())
     assert route_client().get(f"/servers/srv/dex/pools/{POOL}").status_code == 404
+
+
+def test_unknown_pool_soft_lookup_is_null_not_404(route_client, fake_gecko):
+    fake_gecko(pd.DataFrame())
+    r = route_client().get(f"/servers/srv/dex/pools/{POOL}?soft=true")
+    assert r.status_code == 200
+    assert r.json() is None
 
 
 # ── paging, dex filter and favourites ──

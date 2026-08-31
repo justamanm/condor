@@ -64,7 +64,7 @@ router = APIRouter(tags=["market"])
 # values that reach GeckoTerminal as URL path segments, and tells a real address
 # apart from a plain ticker like "BTC".
 _ADDRESS_RE = dex_candles.ADDRESS_RE
-_POOL_ADDRESS_RE = _ADDRESS_RE
+_POOL_ADDRESS_RE = dex_candles.POOL_ADDRESS_RE
 
 
 async def _fetch_dex_candles(

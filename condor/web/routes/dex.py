@@ -31,7 +31,7 @@ router = APIRouter(tags=["dex"])
 # GeckoTerminal as a URL path segment, so they are validated before they get there
 # — the same guard ``/market/candles`` and ``/market/token-symbol`` already apply.
 _ADDRESS_RE = dex_candles.ADDRESS_RE
-_POOL_ADDRESS_RE = _ADDRESS_RE
+_POOL_ADDRESS_RE = dex_candles.POOL_ADDRESS_RE
 
 # The chain the browser opens on, and the one it falls back to when Gateway cannot
 # be reached: Solana is where Condor's CLMM connectors (Meteora, Orca) live.
@@ -161,9 +161,8 @@ async def list_pools(
 
     view = (view or "trending").strip().lower()
     token = (query or "").strip()
-    # A ticker would be pasted straight into a GeckoTerminal path segment.
-    if view == "token" and not _ADDRESS_RE.match(token):
-        raise HTTPException(status_code=400, detail="Invalid token address")
+    if view == "token" and not token:
+        raise HTTPException(status_code=400, detail="Search query is required")
 
     before = _throttle_counter()
     result = await list_gecko_pools_page(
@@ -557,6 +556,10 @@ async def get_pool(
     name: str,
     pool_address: str,
     network: str = Query(default="solana-mainnet-beta"),
+    soft: bool = Query(
+        default=False,
+        description="Return null instead of 404 when a search candidate is not a pool",
+    ),
     user: WebUser = Depends(require_server_access),
 ):
     """One pool by address, so ``/dex/{network}/{address}`` renders from a URL alone.
@@ -589,6 +592,8 @@ async def get_pool(
                     f"not be read. Try again in about {wait:.0f}s."
                 ),
             )
+        if soft:
+            return None
         raise HTTPException(status_code=404, detail="Pool not found")
     return pool
 

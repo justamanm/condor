@@ -1678,9 +1678,19 @@ export const api = {
     ),
 
   /** One pool by address, so /dex/{network}/{address} renders from the URL alone. */
-  getDexPoolByAddress: (server: string, address: string, network: string) =>
+  getDexPoolByAddress: (
+    server: string,
+    address: string,
+    network: string,
+  ) =>
     apiFetch<PoolSummary>(
       `/api/v1/servers/${encodeURIComponent(server)}/dex/pools/${encodeURIComponent(address)}?network=${encodeURIComponent(network)}`,
+    ),
+
+  /** Search-time pool probe: a token address is a valid non-pool result. */
+  findDexPoolByAddress: (server: string, address: string, network: string) =>
+    apiFetch<PoolSummary | null>(
+      `/api/v1/servers/${encodeURIComponent(server)}/dex/pools/${encodeURIComponent(address)}?network=${encodeURIComponent(network)}&soft=true`,
     ),
 
   /**

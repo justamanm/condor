@@ -108,6 +108,12 @@ def test_non_addresses_are_rejected(value):
     assert not market._ADDRESS_RE.match(value)
 
 
+def test_uniswap_v4_pool_id_is_accepted_only_as_a_pool():
+    pool_id = "0x" + "ab" * 32
+    assert dex_candles.POOL_ADDRESS_RE.fullmatch(pool_id)
+    assert not dex_candles.ADDRESS_RE.fullmatch(pool_id)
+
+
 # ── Pair splitting ──
 
 
