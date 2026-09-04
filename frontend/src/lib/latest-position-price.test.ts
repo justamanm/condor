@@ -41,6 +41,35 @@ describe("latestPositionPrice", () => {
       reportedAt: null,
       sourceBotName: "bot",
       sourceBotDisplayName: null,
+      priceQueryGroup: null,
+      cacheHit: false,
+      cacheAgeSeconds: null,
+    });
+  });
+
+  it("shows the real source bot for a grouped cached quote", () => {
+    const source = controller("MICRODUCK-NVDA");
+    source.bot_name = "bot-a";
+    source.bot_display_name = "Bot A";
+    const consumer = controller("MICRODUCK-NVDA");
+    consumer.bot_name = "bot-b";
+    consumer.custom_info = {
+      state: "waiting_to_buy",
+      buy_price_usd: "0.0261",
+      price_quote_completed_at: "2026-09-05T04:17:00Z",
+      price_query_group: "group1",
+      price_quote_cache_hit: true,
+      price_quote_cache_age_seconds: 2.3,
+      price_quote_source_bot_name: "bot-a",
+    };
+
+    expect(latestPositionPrice([source, consumer])).toMatchObject({
+      kind: "price",
+      priceQueryGroup: "group1",
+      cacheHit: true,
+      cacheAgeSeconds: 2.3,
+      sourceBotName: "bot-a",
+      sourceBotDisplayName: "Bot A",
     });
   });
 

@@ -9,6 +9,9 @@ export type LatestPositionPrice =
     reportedAt: string | null;
     sourceBotName: string;
     sourceBotDisplayName: string | null;
+    priceQueryGroup: string | null;
+    cacheHit: boolean;
+    cacheAgeSeconds: number | null;
   }
   | { kind: "multiple" };
 
@@ -27,13 +30,27 @@ export function latestPositionPrice(
       : custom.buy_price_usd;
     const price = Number(rawPrice);
     if (!Number.isFinite(price) || price <= 0) return [];
+    const cachedSourceBotName = typeof custom.price_quote_source_bot_name === "string"
+      ? custom.price_quote_source_bot_name.trim()
+      : "";
+    const sourceBotName = cachedSourceBotName || controller.bot_name;
+    const sourceController = controllers.find((item) => item.bot_name === sourceBotName);
+    const hasCacheAge = custom.price_quote_cache_age_seconds !== null
+      && custom.price_quote_cache_age_seconds !== undefined
+      && custom.price_quote_cache_age_seconds !== "";
+    const rawCacheAge = hasCacheAge ? Number(custom.price_quote_cache_age_seconds) : Number.NaN;
     return [{
       asset: controller.trading_pair?.split("-")[0] || "—",
       price,
       updatedAt: typeof custom.price_quote_completed_at === "string" ? custom.price_quote_completed_at : null,
       reportedAt: typeof custom.reported_at === "string" ? custom.reported_at : null,
-      sourceBotName: controller.bot_name,
-      sourceBotDisplayName: controller.bot_display_name?.trim() || null,
+      sourceBotName,
+      sourceBotDisplayName: sourceController?.bot_display_name?.trim() || null,
+      priceQueryGroup: typeof custom.price_query_group === "string" && custom.price_query_group.trim()
+        ? custom.price_query_group.trim()
+        : null,
+      cacheHit: custom.price_quote_cache_hit === true,
+      cacheAgeSeconds: Number.isFinite(rawCacheAge) ? rawCacheAge : null,
     }];
   });
   if (prices.length === 0) return null;

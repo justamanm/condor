@@ -1367,11 +1367,16 @@ export function ActiveBotsTab({
   const latestPriceAge = latestPrice?.kind === "price" && latestPrice.updatedAt
     ? Math.max(0, Math.floor((pageNow - new Date(latestPrice.updatedAt).getTime()) / 1000))
     : null;
+  const latestPriceSource = latestPrice?.kind === "price"
+    ? latestPrice.sourceBotDisplayName || latestPrice.sourceBotName
+    : "";
   const latestPriceDetail = latestPrice?.kind === "price" && latestPriceAge !== null
-    ? `${latestPriceAge} 秒前更新 · ${latestPrice.sourceBotDisplayName || latestPrice.sourceBotName}`
+    ? latestPrice.priceQueryGroup
+      ? `${latestPriceAge} 秒前更新 · ${latestPrice.priceQueryGroup}（来自 ${latestPriceSource}）`
+      : `${latestPriceAge} 秒前更新 · ${latestPriceSource}`
     : "更新时间暂未获取";
   const latestPriceTitle = latestPrice?.kind === "price"
-    ? `来源 Bot：${latestPrice.sourceBotDisplayName || latestPrice.sourceBotName}\n报价完成：${latestPrice.updatedAt || "未提供"}\nBot 回报：${latestPrice.reportedAt || "未提供"}\n页面收到：${latestPriceReceivedAt ? new Date(latestPriceReceivedAt).toISOString() : "未记录"}`
+    ? `来源 Bot：${latestPriceSource}\n报价分组：${latestPrice.priceQueryGroup || "未分组"}\n缓存状态：${latestPrice.cacheHit ? `命中（${latestPrice.cacheAgeSeconds?.toFixed(1) ?? "未知"} 秒）` : "未命中"}\n报价完成：${latestPrice.updatedAt || "未提供"}\nBot 回报：${latestPrice.reportedAt || "未提供"}\n页面收到：${latestPriceReceivedAt ? new Date(latestPriceReceivedAt).toISOString() : "未记录"}`
     : undefined;
   const formatStrategyPriceRange = (lower: number | null, upper: number | null) => {
     if (lower === null) return "暂未获取";
