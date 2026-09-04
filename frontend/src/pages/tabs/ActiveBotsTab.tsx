@@ -1783,21 +1783,19 @@ export function ActiveBotsTab({
                         : <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text)]">{item.estimatedSellPriceRange}</div>}
                     </div>
                     <div>
-                      <div className="text-xs text-[var(--color-text-muted)]">预计利润</div>
-                      <div
-                        className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums"
-                        style={{ color: item.expectedProfitPercent === null ? "var(--color-text-muted)" : item.expectedProfitPercent >= 0 ? "var(--color-green)" : "var(--color-red)" }}
-                      >
-                        {item.expectedProfitPercent === null
-                          ? "暂未获取"
-                          : `${item.expectedProfitPercent >= 0 ? "+" : ""}${item.expectedProfitPercent.toFixed(2)}%`}
-                      </div>
-                    </div>
-                    <div>
                       <div className="text-xs text-[var(--color-text-muted)]">管理钱包</div>
-                      <div className="mt-1 whitespace-nowrap text-sm font-bold text-[var(--color-text)]" title={item.walletAddress || undefined}>
-                        {item.walletAddress ? `…${item.walletAddress.slice(-5)}` : "暂未获取"}
-                      </div>
+                      {item.walletAddress ? (
+                        <div className="mt-1 min-w-0 text-sm leading-5" title={item.walletAddress}>
+                          <div className="truncate whitespace-nowrap font-bold text-[var(--color-text)]">
+                            {walletAliases[item.walletAddress.toLowerCase()] || "未设置别名"}
+                          </div>
+                          <div className="whitespace-nowrap text-xs font-normal text-[var(--color-text-muted)]">
+                            …{item.walletAddress.slice(-5)}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1 whitespace-nowrap text-sm font-bold text-[var(--color-text-muted)]">暂未获取</div>
+                      )}
                     </div>
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">预计投入</div>
@@ -1809,6 +1807,17 @@ export function ActiveBotsTab({
                       <div className="text-xs text-[var(--color-text-muted)]">当前利润率</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums" style={{ color: item.profitPercentColor }}>
                         {item.profitPercent}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-[var(--color-text-muted)]">预计利润</div>
+                      <div
+                        className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums"
+                        style={{ color: item.expectedProfitPercent === null ? "var(--color-text-muted)" : item.expectedProfitPercent >= 0 ? "var(--color-green)" : "var(--color-red)" }}
+                      >
+                        {item.expectedProfitPercent === null
+                          ? "暂未获取"
+                          : `${item.expectedProfitPercent >= 0 ? "+" : ""}${item.expectedProfitPercent.toFixed(2)}%`}
                       </div>
                     </div>
                     <div>
