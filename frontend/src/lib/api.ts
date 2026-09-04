@@ -638,6 +638,13 @@ export interface ControllerConfigDetail {
   yaml_content?: string | null;
 }
 
+export interface PriceQueryGroup {
+  name: string;
+  normalized_name: string;
+  reference_count: number;
+  references: Array<{ config_id: string; bot_name?: string | null; display_name?: string | null }>;
+}
+
 export interface ControllerSourceResponse {
   controller_name: string;
   controller_type: string;
@@ -1497,6 +1504,24 @@ export const api = {
     apiFetch<AvailableControllersResponse>(
       `/api/v1/servers/${encodeURIComponent(server)}/controllers/configs`,
     ),
+
+  getPriceQueryGroups: (server: string) =>
+    apiFetch<{ items: PriceQueryGroup[] }>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups`),
+
+  createPriceQueryGroup: (server: string, name: string) =>
+    apiFetch<PriceQueryGroup>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups`, {
+      method: "POST", body: JSON.stringify({ name }),
+    }),
+
+  renamePriceQueryGroup: (server: string, currentName: string, name: string) =>
+    apiFetch<{ group: PriceQueryGroup }>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups/${encodeURIComponent(currentName)}`, {
+      method: "PUT", body: JSON.stringify({ name }),
+    }),
+
+  deletePriceQueryGroup: (server: string, name: string) =>
+    apiFetch<{ deleted: boolean }>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
 
   getConfigDetail: (server: string, configId: string) =>
     apiFetch<ControllerConfigDetail>(

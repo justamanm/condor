@@ -22,6 +22,7 @@ import {
 import { configDisplayInfo } from "@/lib/config-display";
 import { calculateBuySize, type BuySizeMode } from "./buy-size";
 import { isFieldApplicable } from "./field-applicability";
+import { PriceQueryGroupSelect } from "./PriceQueryGroupSelect";
 
 // ── Helpers ──
 
@@ -352,6 +353,8 @@ export function ConfigEditor({
                   <div className="flex items-start gap-1">
                     {!applicable ? (
                       <input aria-label={MICRODUCK_FIELD_INFO[key]?.label ?? key} disabled value="不适用" className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text-muted)] opacity-60 cursor-not-allowed" />
+                    ) : key === "price_query_group" && isMicroduck ? (
+                      <PriceQueryGroupSelect server={server} value={displayValue} onChange={(nextValue) => handleEdit(key, nextValue)} />
                     ) : key === "wallet_address" && isMicroduck ? (
                       <div className="min-w-0 w-full">
                         <select

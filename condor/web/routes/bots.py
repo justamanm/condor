@@ -547,6 +547,42 @@ async def list_controller_configs(
     )
 
 
+@router.get("/servers/{name}/price-query-groups")
+async def list_price_query_groups(name: str, user: WebUser = Depends(require_server_access)):
+    client = await get_config_manager().get_client(name)
+    try:
+        return await client.controllers._get("/price-query-groups")
+    except Exception as exc:
+        raise upstream_error("无法读取报价分组", exc)
+
+
+@router.post("/servers/{name}/price-query-groups")
+async def create_price_query_group(name: str, body: dict[str, Any], user: WebUser = Depends(require_server_access)):
+    client = await get_config_manager().get_client(name)
+    try:
+        return await client.controllers._post("/price-query-groups", json=body)
+    except Exception as exc:
+        raise upstream_error("无法创建报价分组", exc)
+
+
+@router.put("/servers/{name}/price-query-groups/{group_name}")
+async def rename_price_query_group(name: str, group_name: str, body: dict[str, Any], user: WebUser = Depends(require_server_access)):
+    client = await get_config_manager().get_client(name)
+    try:
+        return await client.controllers._put(f"/price-query-groups/{group_name}", json=body)
+    except Exception as exc:
+        raise upstream_error("无法重命名报价分组", exc)
+
+
+@router.delete("/servers/{name}/price-query-groups/{group_name}")
+async def delete_price_query_group(name: str, group_name: str, user: WebUser = Depends(require_server_access)):
+    client = await get_config_manager().get_client(name)
+    try:
+        return await client.controllers._delete(f"/price-query-groups/{group_name}")
+    except Exception as exc:
+        raise upstream_error("无法删除报价分组", exc)
+
+
 @router.get(
     "/servers/{name}/controllers/configs/{config_id}",
     response_model=ControllerConfigDetail,
