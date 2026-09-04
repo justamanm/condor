@@ -11,6 +11,14 @@ export const PNL_SERIES_COLORS = {
   position: "#a78bfa",
 } as const;
 
+/** 同为金额的成交额和持仓价值共用此坐标格式，小额不能被取整成同一个 $1。 */
+export function formatValueAxis(value: number, symbol = "$"): string {
+  const abs = Math.abs(value);
+  if (abs >= 1000) return `${symbol}${(value / 1000).toFixed(1)}K`;
+  if (abs < 10) return `${symbol}${value.toFixed(2)}`;
+  return `${symbol}${value.toFixed(0)}`;
+}
+
 /** A single point on a PNL evolution chart (per-controller or aggregated). */
 export interface PnlChartPoint {
   time: number;
@@ -26,10 +34,11 @@ export function positionQuoteValue(positions: Record<string, unknown>[]): number
   let value = 0;
   for (const pos of positions) {
     const amt = Number(pos.amount || pos.net_amount_base || 0);
-    const price = Number(pos.breakeven_price || pos.entry_price || pos.current_price || 0);
+    const explicitValue = Number(pos.quote_value || pos.current_value_quote || 0);
+    const price = Number(pos.current_price || pos.breakeven_price || pos.entry_price || 0);
     const side = String(pos.side || pos.position_side || "");
     const isSell = side.toLowerCase().includes("sell") || side.toLowerCase().includes("short");
-    const notional = amt * price;
+    const notional = explicitValue || amt * price;
     value += isSell ? -notional : notional;
   }
   return value;

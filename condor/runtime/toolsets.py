@@ -118,7 +118,8 @@ def _hummingbot_mcp_args(server: dict[str, Any], server_name: str) -> list[str]:
     (e.g. ``port: 8000``), and pydantic-ai's StdioServerParameters rejects
     non-string args when starting LM Studio / other local-model sessions.
     """
-    api_url = f"http://{server['host']}:{server['port']}"
+    override = os.environ.get(f"CONDOR_SERVER_URL_{server_name.upper()}", "").strip()
+    api_url = override.rstrip("/") if override else f"http://{server['host']}:{server['port']}"
     return [
         "run",
         "python",

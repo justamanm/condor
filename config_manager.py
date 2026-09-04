@@ -5,12 +5,14 @@ Manages servers, users, permissions, and settings in a single config.yml file.
 
 import asyncio
 import logging
+import os
 import secrets
 import shutil
 import time
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 
 import yaml
 from aiohttp import ClientTimeout
@@ -455,6 +457,17 @@ class ConfigManager:
         async with self._client_locks[name]:
             return await self._get_or_create_client(name, HummingbotAPIClient)
 
+    def _server_base_url(self, name: str) -> str:
+        """返回服务器地址；容器可覆盖单个服务器且不改写 config.yml。"""
+        override = os.environ.get(f"CONDOR_SERVER_URL_{name.upper()}", "").strip()
+        if override:
+            parsed = urlparse(override)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError(f"CONDOR_SERVER_URL_{name.upper()} must be a valid HTTP URL")
+            return override.rstrip("/")
+        server = self._data["servers"][name]
+        return f"http://{server['host']}:{server['port']}"
+
     async def _get_or_create_client(self, name: str, HummingbotAPIClient):
         """Inner client acquisition — must be called under _client_locks[name]."""
         # Re-check under lock (another coroutine may have just created it)
@@ -487,7 +500,7 @@ class ConfigManager:
 
         # Create new client
         server = self._data["servers"][name]
-        base_url = f"http://{server['host']}:{server['port']}"
+        base_url = self._server_base_url(name)
         client = HummingbotAPIClient(
             base_url=base_url,
             username=server["username"],
@@ -557,7 +570,7 @@ class ConfigManager:
             return {"status": "error", "message": "Server not found"}
 
         server = self._data["servers"][name]
-        base_url = f"http://{server['host']}:{server['port']}"
+        base_url = self._server_base_url(name)
 
         client = HummingbotAPIClient(
             base_url=base_url,

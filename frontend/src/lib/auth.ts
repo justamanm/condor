@@ -6,7 +6,12 @@ import {
   useState,
 } from "react";
 
-import { TOKEN_KEY, authHeaders } from "./auth-token";
+import {
+  SESSION_REFRESHED_EVENT,
+  TOKEN_KEY,
+  USER_KEY,
+  authHeaders,
+} from "./auth-token";
 import { clearDiagnostics } from "./diagnostics";
 import { queryClient } from "./queryClient";
 
@@ -26,8 +31,6 @@ export interface AuthState {
   loginLocal: () => Promise<void>;
   logout: () => void;
 }
-
-const USER_KEY = "condor_user";
 
 /** Selected Hummingbot API server. Session state: cleared on every session boundary. */
 export const SERVER_KEY = "condor_selected_server";
@@ -158,6 +161,20 @@ export function useAuthState(): AuthState {
       // server not available, keep token
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A normal API request can discover that the 24-hour JWT expired. In local
+  // mode authFetch renews it without showing a login page; mirror that renewed
+  // session into React state so WebSockets and route guards switch tokens too.
+  useEffect(() => {
+    const handleSessionRefresh = (event: Event) => {
+      const session = (event as CustomEvent<{ token: string; user: User }>).detail;
+      if (!session?.token || !session?.user) return;
+      setToken(session.token);
+      setUser(session.user);
+    };
+    window.addEventListener(SESSION_REFRESHED_EVENT, handleSessionRefresh);
+    return () => window.removeEventListener(SESSION_REFRESHED_EVENT, handleSessionRefresh);
+  }, []);
 
   return {
     user,

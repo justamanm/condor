@@ -52,7 +52,7 @@ export function BotDetail() {
     const sig = JSON.stringify(data.config);
     if (sig === prevConfigSig.current) return;
     prevConfigSig.current = sig;
-    const dumped = configToYaml(data.config);
+    const dumped = configToYaml(data.config, { groupSections: true });
     setYamlValue(dumped);
     setOriginalYaml(dumped);
     setYamlError(null);

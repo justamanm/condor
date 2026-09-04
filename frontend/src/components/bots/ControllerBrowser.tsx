@@ -19,6 +19,7 @@ import { CodeEditor } from "@/components/editor/CodeEditor";
 import { ControllerPnlChart } from "@/components/bots/ControllerPnlChart";
 import { api, type ControllerInfo } from "@/lib/api";
 import { configToYaml, CONTROLLER_HIDDEN_KEYS } from "@/lib/configYaml";
+import { configDisplayInfo } from "@/lib/config-display";
 import { formatCurrencyVolume, formatCurrencyPnl, pnlColor } from "@/lib/formatters";
 import { setViewContext } from "@/lib/viewContext";
 
@@ -79,6 +80,7 @@ function YamlConfigEditor({
         hiddenKeys: CONTROLLER_HIDDEN_KEYS,
         stripUnderscore: true,
         sortKeys: true,
+        groupSections: true,
       }),
     [config],
   );
@@ -337,7 +339,9 @@ export function ControllerBrowser({
                 <div className="flex items-center gap-2">
                   <StatusDot status={ctrlStopping ? "stopping" : killed ? "stopped" : c.status} />
                   <span className={`truncate text-xs font-medium ${isActive ? "text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}>
-                    {c.controller_id || c.controller_name}
+                    <span title={configDisplayInfo(c.controller_id || c.controller_name).tooltip}>
+                      {configDisplayInfo(c.controller_id || c.controller_name).name}
+                    </span>
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-2 pl-4 text-[10px]">
@@ -635,4 +639,3 @@ export function ControllerBrowser({
     </div>
   );
 }
-

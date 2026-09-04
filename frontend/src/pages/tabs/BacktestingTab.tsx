@@ -26,6 +26,7 @@ import type { BacktestData, CandleData, ExecutorData } from "@/lib/backtest";
 import { extractResults } from "@/lib/backtest";
 import { MANY_EXECUTORS_THRESHOLD, computeVolumeBuckets } from "@/lib/executor-volume";
 import { formatPct, formatPnl, formatUsd, pnlColor, tsToSeconds } from "@/lib/formatters";
+import { configDisplayInfo } from "@/lib/config-display";
 
 // -- Helpers --
 
@@ -1182,7 +1183,7 @@ function BacktestResults({
               </span>
               {configId && (
                 <code className="text-xs text-[var(--color-text-muted)] truncate">
-                  {configId}
+                  <span title={configDisplayInfo(configId).tooltip}>{configDisplayInfo(configId).name}</span>
                 </code>
               )}
             </div>

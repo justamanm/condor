@@ -89,6 +89,7 @@ GOLDEN_REST = {
             "volume_traded": 1234.5,
             "close_type_counts": {"TAKE_PROFIT": 3},
             "positions_summary": [{"pair": "BTC-USDT"}],
+            "trades": [],
             "deployed_at": "2026-07-01T00:00:00Z",
             "config": {
                 "id": "cfg-123",
@@ -97,6 +98,7 @@ GOLDEN_REST = {
                 "trading_pair": "BTC-USDT",
                 "manual_kill_switch": False,
             },
+            "custom_info": {},
         },
         {
             "controller_name": "quiet_ctrl",
@@ -112,8 +114,10 @@ GOLDEN_REST = {
             "volume_traded": 50.0,
             "close_type_counts": {},
             "positions_summary": [],
+            "trades": [],
             "deployed_at": "2026-07-01T00:00:00Z",
             "config": {},
+            "custom_info": {},
         },
     ],
     "bots": [
@@ -159,6 +163,7 @@ GOLDEN_WS = {
             "volume_traded": 1234.5,
             "close_type_counts": {"TAKE_PROFIT": 3},
             "positions_summary": [{"pair": "BTC-USDT"}],
+            "trades": [],
             "deployed_at": None,
             "config": {},
         },
@@ -176,6 +181,7 @@ GOLDEN_WS = {
             "volume_traded": 0.0,
             "close_type_counts": {},
             "positions_summary": [],
+            "trades": [],
             "deployed_at": None,
             "config": {},
         },
@@ -405,3 +411,33 @@ def test_extract_bots_list_handles_malformed_inputs():
         {"bot_name": "a"}
     ]
     assert extract_bots_list([{"bot_name": "b"}, 42]) == [{"bot_name": "b"}]
+
+
+def test_live_custom_info_is_kept_for_the_active_page():
+    raw = {
+        "status": "success",
+        "data": {
+            "alpha": {
+                "status": "running",
+                "performance": {
+                    "ctrl_a": {
+                        "status": "running",
+                        "performance": {},
+                        "custom_info": {
+                            "state": "holding",
+                            "buy_price_min_usd": "0.013",
+                            "sell_price_max_usd": "0.021545",
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    page = build_bots_page(raw)
+
+    assert page["controllers"][0]["custom_info"] == {
+        "state": "holding",
+        "buy_price_min_usd": "0.013",
+        "sell_price_max_usd": "0.021545",
+    }

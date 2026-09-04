@@ -490,10 +490,12 @@ async def deploy_bot(
     client: Any,
     bot_name: str,
     controllers_config: list[str],
+    controller_overrides: dict[str, dict[str, Any]] | None = None,
     account_name: str | None = "master_account",
     max_global_drawdown_quote: float | None = None,
     max_controller_drawdown_quote: float | None = None,
-    image: str = "hummingbot/hummingbot:latest",
+    image: str = "microduck/hummingbot:local",
+    display_name: str | None = None,
 ) -> dict[str, Any]:
     """
     Deploy a bot with specified controller configurations.
@@ -510,18 +512,29 @@ async def deploy_bot(
     Returns:
         Dictionary containing deployment results
     """
-    result = await client.bot_orchestration.deploy_v2_controllers(
-        instance_name=bot_name,
-        controllers_config=controllers_config,
-        credentials_profile=account_name,
-        max_global_drawdown_quote=max_global_drawdown_quote,
-        max_controller_drawdown_quote=max_controller_drawdown_quote,
-        image=image,
+    # 客户端的便捷方法尚未支持独立配置覆盖值；沿用其已认证的传输层，
+    # 一次性发送完整请求。不能在失败后去掉覆盖值重试，否则可能错误部署。
+    payload = {
+        "instance_name": bot_name,
+        "controllers_config": controllers_config,
+        "controller_overrides": controller_overrides or {},
+        "credentials_profile": account_name,
+        "image": image,
+    }
+    if max_global_drawdown_quote is not None:
+        payload["max_global_drawdown_quote"] = max_global_drawdown_quote
+    if max_controller_drawdown_quote is not None:
+        payload["max_controller_drawdown_quote"] = max_controller_drawdown_quote
+    if display_name and display_name.strip():
+        payload["display_name"] = display_name.strip()
+    result = await client.bot_orchestration._post(
+        "/bot-orchestration/deploy-v2-controllers", json=payload,
     )
 
     return {
         "bot_name": bot_name,
         "controllers_config": controllers_config,
+        "controller_overrides": controller_overrides or {},
         "account_name": account_name,
         "image": image,
         "result": result,

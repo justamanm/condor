@@ -15,7 +15,7 @@ import {
 
 import { api, type ControllerInfo } from "@/lib/api";
 import { formatCurrencyVolume, formatCurrencyPnl, formatTime, pnlColor, toMs } from "@/lib/formatters";
-import { positionQuoteValue, PNL_SERIES_COLORS, type PnlChartPoint } from "@/lib/pnl-chart";
+import { formatValueAxis, positionQuoteValue, PNL_SERIES_COLORS, type PnlChartPoint } from "@/lib/pnl-chart";
 import { getThemeColors } from "@/lib/theme-colors";
 import { BottomTooltip, PnlTooltip } from "./PnlChartTooltips";
 
@@ -123,7 +123,7 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
   const bottomH = height - pnlH;
   const fmtPnl = (v: number) => formatCurrencyPnl(v, currencySymbol);
   const fmtAxis = (v: number) => `${currencySymbol}${Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + "K" : v.toFixed(Math.abs(v) < 10 ? 2 : 0)}`;
-  const fmtVolAxis = (v: number) => `${currencySymbol}${Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + "K" : v.toFixed(0)}`;
+  const fmtValueAxis = (v: number) => formatValueAxis(v, currencySymbol);
 
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
@@ -144,7 +144,7 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
               U: <span style={{ color: PNL_SERIES_COLORS.unrealized }}>{fmtPnl(latest.unrealized)}</span>
             </span>
             <span className="text-[var(--color-text-muted)]">
-              Vol: <span style={{ color: PNL_SERIES_COLORS.volume }}>{formatCurrencyVolume(latest.volume, currencySymbol)}</span>
+              Traded: <span style={{ color: PNL_SERIES_COLORS.volume }}>{formatCurrencyVolume(latest.volume, currencySymbol)}</span>
             </span>
           </div>
         )}
@@ -179,16 +179,6 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
               axisLine={false}
               width={52}
             />
-            {hasPosition && (
-              <YAxis
-                yAxisId="spacer"
-                orientation="right"
-                tick={false}
-                tickLine={false}
-                axisLine={false}
-                width={52}
-              />
-            )}
             <ReferenceLine y={0} stroke="var(--color-text-muted)" strokeOpacity={0.3} strokeDasharray="4 4" />
             <Tooltip content={<PnlTooltip symbol={currencySymbol} />} />
             <Area type="monotone" dataKey="total" stroke="none" fill="url(#ctrlPnlGrad)" activeDot={false} legendType="none" />
@@ -221,31 +211,27 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
               tickLine={false}
             />
             <YAxis
-              yAxisId="vol"
-              tickFormatter={fmtVolAxis}
-              tick={{ fontSize: 10, fill: PNL_SERIES_COLORS.volume }}
+              yAxisId="value"
+              domain={[0, "auto"]}
+              tickFormatter={fmtValueAxis}
+              tick={{ fontSize: 10, fill: "var(--color-text-muted)" }}
               stroke="var(--color-border)"
               tickLine={false}
               axisLine={false}
-              width={52}
+              width={58}
             />
-            {hasPosition && (
-              <YAxis
-                yAxisId="pos"
-                orientation="right"
-                tickFormatter={fmtVolAxis}
-                tick={{ fontSize: 10, fill: PNL_SERIES_COLORS.position }}
-                stroke="var(--color-border)"
-                tickLine={false}
-                axisLine={false}
-                width={52}
-              />
-            )}
             <Tooltip content={<BottomTooltip symbol={currencySymbol} />} />
-            <Line yAxisId="vol" type="monotone" dataKey="volume" stroke={PNL_SERIES_COLORS.volume} strokeWidth={1.5} dot={false} />
+            <Line yAxisId="value" name="Cumulative Traded" type="monotone" dataKey="volume" stroke={PNL_SERIES_COLORS.volume} strokeWidth={1.5} dot={false} />
             {hasPosition && (
-              <Line yAxisId="pos" type="monotone" dataKey="position" stroke={PNL_SERIES_COLORS.position} strokeWidth={1.5} dot={false} />
+              <Line yAxisId="value" name="Held Value" type="monotone" dataKey="position" stroke={PNL_SERIES_COLORS.position} strokeWidth={1.5} dot={false} />
             )}
+            <Legend
+              verticalAlign="top"
+              align="right"
+              iconType="plainline"
+              wrapperStyle={{ fontSize: 10, paddingBottom: 2 }}
+              formatter={(value: string) => <span className="text-[var(--color-text-muted)] text-[10px]">{value}</span>}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

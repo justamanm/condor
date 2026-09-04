@@ -33,6 +33,7 @@ import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useServer } from "@/hooks/useServer";
 import { api, type ControllerConfigSummary } from "@/lib/api";
 import { configToYaml } from "@/lib/configYaml";
+import { configDisplayInfo } from "@/lib/config-display";
 
 // ── Types ──
 
@@ -515,7 +516,7 @@ export function EditorTab() {
     return (data.configs ?? []).map((cfg) => ({
       kind: "config" as const,
       id: `cfg:${cfg.id}`,
-      label: cfg.id,
+      label: configDisplayInfo(cfg.id).name,
       group: cfg.controller_name || "other",
       configId: cfg.id,
       configSummary: cfg,
@@ -923,7 +924,9 @@ function FileContentLoader({
     } else if (tab.file.kind === "config") {
       if (configQuery.data) {
         loadedRef.current = true;
-        const dumped = configToYaml(configQuery.data.config);
+        const dumped =
+          configQuery.data.yaml_content ??
+          configToYaml(configQuery.data.config, { groupSections: true });
         onLoaded(dumped, false);
       } else if (configQuery.isError) {
         loadedRef.current = true;

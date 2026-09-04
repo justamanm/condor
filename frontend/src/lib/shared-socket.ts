@@ -138,6 +138,8 @@ function handleMessage(channel: string, data: unknown): void {
             ...c,
             config: Object.keys(c.config || {}).length ? c.config : prev.config,
             deployed_at: c.deployed_at ?? prev.deployed_at,
+            // 实时状态推送不读取运行记录，因此没有别名；保留 REST 已取得的别名。
+            bot_display_name: c.bot_display_name ?? prev.bot_display_name,
             connector: c.connector || prev.connector,
             trading_pair: c.trading_pair || prev.trading_pair,
             controller_name: prev.controller_name || c.controller_name,
@@ -146,7 +148,11 @@ function handleMessage(channel: string, data: unknown): void {
         }),
         bots: incoming.bots.map((b) => {
           const prev = oldBotMap.get(b.bot_name);
-          return { ...b, deployed_at: b.deployed_at ?? prev?.deployed_at ?? null };
+          return {
+            ...b,
+            deployed_at: b.deployed_at ?? prev?.deployed_at ?? null,
+            display_name: b.display_name ?? prev?.display_name ?? null,
+          };
         }),
       };
     });

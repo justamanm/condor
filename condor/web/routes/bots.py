@@ -75,6 +75,40 @@ def clear_controller_stopping(server: str, bot_name: str, controller_id: str) ->
         _stopping_controllers.pop(f"{server}:{bot_name}:{controller_id}", None)
 
 
+def clear_bot_transition_state(server: str, bot_name: str) -> None:
+    """清除一个机器人及其控制器的临时活动状态。"""
+    controller_prefix = f"{server}:{bot_name}:"
+    with _stopping_lock:
+        _stopping_bots.pop(f"{server}:{bot_name}", None)
+        for key in list(_stopping_controllers):
+            if key.startswith(controller_prefix):
+                _stopping_controllers.pop(key, None)
+
+
+async def refresh_bot_activity_cache(
+    server: str, bot_name: str, *, clear_transition: bool = True
+) -> None:
+    """机器人操作完成后立即清除旧状态并重新获取最新列表。"""
+    from condor.server_data_service import ServerDataType, get_server_data_service
+
+    if clear_transition:
+        clear_bot_transition_state(server, bot_name)
+    sds = get_server_data_service()
+    try:
+        fresh = await sds.refresh(server, ServerDataType.BOTS_STATUS)
+        if fresh is None:
+            sds.invalidate(server, ServerDataType.BOTS_STATUS)
+    except Exception as e:
+        # 操作本身已经成功；刷新失败时保持缓存为空，不把成功操作改报为失败。
+        sds.invalidate(server, ServerDataType.BOTS_STATUS)
+        logger.warning(
+            "Failed to refresh bot activity after mutation for '%s' on '%s': %s",
+            bot_name,
+            server,
+            e,
+        )
+
+
 def get_stopping_bots(server: str) -> set[str]:
     """Return bot names currently in stopping state for a server."""
     now = time.monotonic()
@@ -125,10 +159,10 @@ def _set(obj: Any, key: str, value: Any) -> None:
 
 
 def overlay_stopping_state(server: str, controllers: list, bots: list) -> None:
-    """Overlay transitional 'stopping' state onto bots and controllers.
+    """隐藏已停止的机器人，直到上游确认它已完成后台归档。
 
-    Shared by the REST path (Pydantic models) and the WS broadcast path
-    (plain dicts); the `_get`/`_set` adapter handles both shapes.
+    Stop 接口只是启动后台归档；随后的刷新仍可能收到旧实例。这里把停止记录
+    当作临时屏蔽名单，REST 和 WebSocket 都不能把旧实例重新显示出来。
     """
     stopping_bot_names = get_stopping_bots(server)
     stopping_ctrl_keys = get_stopping_controllers(server)
@@ -136,16 +170,19 @@ def overlay_stopping_state(server: str, controllers: list, bots: list) -> None:
     if not stopping_bot_names and not stopping_ctrl_keys:
         return
 
-    active_bot_names = set()
-    for bot in bots:
-        bot_name = _get(bot, "bot_name", "")
-        active_bot_names.add(bot_name)
-        if bot_name in stopping_bot_names:
-            if _get(bot, "status") == "running":
-                _set(bot, "status", "stopping")
-            else:
-                # Bot already reports non-running → the stop landed
-                clear_bot_stopping(server, bot_name)
+    active_bot_names = {_get(bot, "bot_name", "") for bot in bots}
+
+    if stopping_bot_names:
+        bots[:] = [
+            bot
+            for bot in bots
+            if _get(bot, "bot_name", "") not in stopping_bot_names
+        ]
+        controllers[:] = [
+            ctrl
+            for ctrl in controllers
+            if _get(ctrl, "bot_name", "") not in stopping_bot_names
+        ]
 
     # Clear stopping bots that disappeared from the response (fully stopped)
     for sbn in stopping_bot_names:
@@ -209,7 +246,9 @@ def _extract_perf_snapshots(result: Any) -> list[dict]:
     return []
 
 
-def _collect_bot_runs(result: Any, runs: dict[str, str]) -> None:
+def _collect_bot_runs(
+    result: Any, runs: dict[str, str], display_names: dict[str, str]
+) -> None:
     """Merge a bot-runs API response into ``runs`` (bot_name -> deployed_at)."""
     if not isinstance(result, dict):
         return
@@ -220,6 +259,9 @@ def _collect_bot_runs(result: Any, runs: dict[str, str]) -> None:
                 deployed = run_info.get("deployed_at") or run_info.get("created_at")
                 if deployed:
                     runs[bot_name] = str(deployed)
+                display_name = run_info.get("display_name")
+                if isinstance(display_name, str) and display_name.strip():
+                    display_names[bot_name] = display_name.strip()
             elif isinstance(run_info, str):
                 runs[bot_name] = run_info
     elif isinstance(runs_data, list):
@@ -229,6 +271,9 @@ def _collect_bot_runs(result: Any, runs: dict[str, str]) -> None:
                 deployed = run.get("deployed_at") or run.get("created_at")
                 if bn and deployed:
                     runs[bn] = str(deployed)
+                display_name = run.get("display_name")
+                if bn and isinstance(display_name, str) and display_name.strip():
+                    display_names[bn] = display_name.strip()
 
 
 @router.get("/servers/{name}/bots", response_model=BotsPageResponse)
@@ -266,6 +311,7 @@ async def list_bots(name: str, user: WebUser = Depends(require_server_access)):
     # Pre-fetch controller configs, bot runs, AND latest controller performance concurrently
     ctrl_configs: dict[str, dict] = {}
     bot_runs: dict[str, str] = {}
+    bot_display_names: dict[str, str] = {}
     latest_perf: dict[str, dict] = {}  # keyed by controller_id
 
     if client is not None:
@@ -294,7 +340,7 @@ async def list_bots(name: str, user: WebUser = Depends(require_server_access)):
             await asyncio.gather(*[_get_one(bn) for bn in bot_names])
             return configs_map
 
-        async def _fetch_bot_runs() -> dict[str, str]:
+        async def _fetch_bot_runs() -> tuple[dict[str, str], dict[str, str]]:
             """Deployed-at timestamps keyed by bot name, for the Age column.
 
             Filtered to DEPLOYED on purpose: the unfiltered listing also returns
@@ -304,12 +350,14 @@ async def list_bots(name: str, user: WebUser = Depends(require_server_access)):
             filtered), leaving every bot without an age.
             """
             runs: dict[str, str] = {}
+            display_names: dict[str, str] = {}
             try:
                 _collect_bot_runs(
                     await client.bot_orchestration.get_bot_runs(
                         deployment_status="DEPLOYED"
                     ),
                     runs,
+                    display_names,
                 )
             except Exception:
                 logger.debug("Bot runs not available for '%s'", name)
@@ -330,12 +378,13 @@ async def list_bots(name: str, user: WebUser = Depends(require_server_access)):
                                 bot_name=bn, limit=1
                             ),
                             runs,
+                            display_names,
                         )
                     except Exception:
                         pass
 
                 await asyncio.gather(*[_get_one_run(bn) for bn in missing])
-            return runs
+            return runs, display_names
 
         async def _fetch_latest_perf() -> dict[str, dict]:
             """Fetch latest controller performance snapshots from DB."""
@@ -372,16 +421,18 @@ async def list_bots(name: str, user: WebUser = Depends(require_server_access)):
                 )
                 return default
 
-        ctrl_configs, bot_runs, latest_perf = await asyncio.gather(
+        ctrl_configs, bot_run_data, latest_perf = await asyncio.gather(
             _with_timeout(_fetch_ctrl_configs(), "controller configs", {}),
-            _with_timeout(_fetch_bot_runs(), "bot runs", {}),
+            _with_timeout(_fetch_bot_runs(), "bot runs", ({}, {})),
             _with_timeout(_fetch_latest_perf(), "latest performance", {}),
         )
+        bot_runs, bot_display_names = bot_run_data
 
     page = build_bots_page(
         result,
         ctrl_configs=ctrl_configs,
         bot_runs=bot_runs,
+        bot_display_names=bot_display_names,
         latest_perf=latest_perf,
     )
 
@@ -517,11 +568,30 @@ async def get_controller_config(
     if not isinstance(result, dict):
         raise HTTPException(status_code=404, detail="Config not found")
 
+    yaml_content = None
+    try:
+        raw_result = await client.controllers._get(
+            f"/controllers/configs/{config_id}/raw"
+        )
+        if isinstance(raw_result, dict) and isinstance(
+            raw_result.get("yaml_content"), str
+        ):
+            yaml_content = raw_result["yaml_content"]
+    except Exception as e:
+        # 兼容尚未提供原文接口的远端服务；页面会退回到旧的生成方式。
+        logger.warning(
+            "Failed to fetch raw controller config '%s' from '%s': %s",
+            config_id,
+            name,
+            e,
+        )
+
     return ControllerConfigDetail(
         id=str(result.get("config_base_name") or result.get("id", config_id)),
         controller_name=result.get("controller_name", ""),
         controller_type=result.get("controller_type", ""),
         config=result,
+        yaml_content=yaml_content,
     )
 
 
@@ -535,16 +605,18 @@ async def update_controller_config(
     """Update a saved controller config's parameters.
 
     Accepts either:
-      - { "yaml_content": "..." } — parse YAML to dict, save
+      - { "yaml_content": "..." } — validate and save the YAML text unchanged
       - { ... } (raw dict) — existing behavior preserved
     """
     cm = get_config_manager()
 
     client = await cm.get_client(name)
 
-    # If yaml_content is provided, parse it as the full config
-    yaml_content = body.pop("yaml_content", None)
+    # 原文保存仍先校验 YAML，但不能转换后再写回，否则注释和空行会丢失。
+    yaml_content = body.get("yaml_content")
     if yaml_content is not None:
+        if not isinstance(yaml_content, str):
+            raise HTTPException(status_code=400, detail="yaml_content must be a string")
         try:
             parsed = yaml.safe_load(yaml_content)
             if not isinstance(parsed, dict):
@@ -555,7 +627,22 @@ async def update_controller_config(
         except yaml.YAMLError as e:
             raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
 
-    is_full_replace = yaml_content is not None
+        try:
+            result = await client.controllers._put(
+                f"/controllers/configs/{config_id}/raw",
+                json={"yaml_content": yaml_content},
+            )
+        except Exception as e:
+            logger.exception(
+                "Failed to save raw controller config '%s' on '%s'",
+                config_id,
+                name,
+            )
+            raise upstream_error(
+                "配置服务不支持原样保存，已取消本次保存以避免丢失注释", e
+            )
+
+        return {"updated": True, "config_id": config_id, "result": result}
 
     try:
         # Fetch existing config so we preserve controller_name/type/id
@@ -563,15 +650,8 @@ async def update_controller_config(
         if not isinstance(existing, dict):
             raise HTTPException(status_code=404, detail="Config not found")
 
-        if is_full_replace:
-            # Full replacement: use parsed YAML as-is, only preserve identity fields
-            merged = {**body}
-            for key in ("id", "controller_name", "controller_type"):
-                if key in existing and key not in merged:
-                    merged[key] = existing[key]
-        else:
-            # Partial update: merge user edits into existing config
-            merged = {**existing, **body}
+        # Partial update: merge user edits into existing config
+        merged = {**existing, **body}
 
         merged["id"] = config_id  # ensure id stays consistent
         # Strip internal fields like _config_name that cause Pydantic validation errors
@@ -589,6 +669,48 @@ async def update_controller_config(
         raise upstream_error("Failed to save controller config", e)
 
     return {"updated": True, "config_id": config_id, "result": result}
+
+
+@router.get("/servers/{name}/controllers/configs/{config_id}/external-position")
+async def get_external_controller_position(
+    name: str,
+    config_id: str,
+    user: WebUser = Depends(require_server_access),
+):
+    """读取已导入的外部持仓，供界面回填。"""
+    cm = get_config_manager()
+    client = await cm.get_client(name)
+    try:
+        return await client.controllers._get(
+            f"/controllers/configs/{config_id}/external-position"
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to read external position for '%s' on '%s'", config_id, name
+        )
+        raise upstream_error("读取外部持仓失败", e)
+
+
+@router.post("/servers/{name}/controllers/configs/{config_id}/external-position")
+async def import_external_controller_position(
+    name: str,
+    config_id: str,
+    body: dict[str, Any],
+    user: WebUser = Depends(require_server_access),
+):
+    """导入外部买入的持仓，不改写控制器 YAML。"""
+    cm = get_config_manager()
+    client = await cm.get_client(name)
+    try:
+        return await client.controllers._post(
+            f"/controllers/configs/{config_id}/external-position",
+            json=body,
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to import external position for '%s' on '%s'", config_id, name
+        )
+        raise upstream_error("导入外部持仓失败", e)
 
 
 @router.get(
@@ -818,15 +940,48 @@ async def deploy_bot_endpoint(
             client=client,
             bot_name=body.bot_name,
             controllers_config=body.controllers_config,
+            controller_overrides=body.controller_overrides,
             account_name=body.account_name,
             image=body.image,
             max_global_drawdown_quote=body.max_global_drawdown_quote,
             max_controller_drawdown_quote=body.max_controller_drawdown_quote,
+            display_name=body.display_name,
         )
     except Exception as e:
         logger.exception("Failed to deploy bot '%s' on '%s'", body.bot_name, name)
         raise upstream_error("Failed to deploy bot", e)
 
+    await refresh_bot_activity_cache(name, body.bot_name)
+
+    return result
+
+
+@router.put("/servers/{name}/bots/{bot_name}/display-name")
+async def update_bot_display_name_endpoint(
+    name: str,
+    bot_name: str,
+    body: dict[str, Any],
+    user: WebUser = Depends(require_server_access),
+):
+    """Set or clear a user-facing Bot alias without changing its container name."""
+    raw_name = body.get("display_name")
+    if raw_name is not None and not isinstance(raw_name, str):
+        raise HTTPException(status_code=422, detail="别名必须是文本")
+    display_name = raw_name.strip() if isinstance(raw_name, str) else None
+    if display_name == "":
+        display_name = None
+    if display_name is not None and len(display_name) > 80:
+        raise HTTPException(status_code=422, detail="别名最多 80 个字符")
+
+    client = await get_config_manager().get_client(name)
+    try:
+        result = await client.bot_orchestration._put(
+            f"/bot-orchestration/bot-runs/{bot_name}/display-name",
+            json={"display_name": display_name},
+        )
+    except Exception as e:
+        logger.exception("Failed to update bot alias '%s' on '%s'", bot_name, name)
+        raise upstream_error("保存 Bot 别名失败", e)
     return result
 
 
@@ -854,6 +1009,34 @@ async def stop_bot_endpoint(
         logger.exception("Failed to stop bot '%s' on '%s'", bot_name, name)
         raise upstream_error("Failed to stop bot", e)
 
+    # Stop-and-archive runs in the API background. Keep the transition record
+    # until a later status snapshot confirms that the old bot disappeared.
+    await refresh_bot_activity_cache(name, bot_name, clear_transition=False)
+
+    return result
+
+
+@router.post("/servers/{name}/bots/{bot_name}/restart")
+async def restart_bot_endpoint(
+    name: str, bot_name: str, user: WebUser = Depends(require_server_access)
+):
+    """Restart the existing Bot container; unlike remove, it preserves all Bot data."""
+    cm = get_config_manager()
+    client = await cm.get_client(name)
+
+    from mcp_servers.hummingbot_api.tools.bot_management import manage_bot_execution
+
+    try:
+        result = await manage_bot_execution(
+            client=client,
+            bot_name=bot_name,
+            action="restart_bot",
+        )
+    except Exception as e:
+        logger.exception("Failed to restart bot '%s' on '%s'", bot_name, name)
+        raise upstream_error("Failed to restart bot", e)
+
+    await refresh_bot_activity_cache(name, bot_name)
     return result
 
 
@@ -941,10 +1124,13 @@ async def update_bot_controller_config_endpoint(
                 detail=f"Controller '{config_id}' not found in bot '{bot_name}'",
             )
 
+        confirm_live_trading = bool(body.get("_confirm_live_trading", False))
         merged = {**existing, **body}
         merged["id"] = config_id
         # Strip internal fields like _config_name that cause Pydantic validation errors
         merged = {k: v for k, v in merged.items() if not k.startswith("_")}
+        if confirm_live_trading:
+            merged["_confirm_live_trading"] = True
 
         result = await client.controllers.update_bot_controller_config(
             bot_name, config_id, merged
@@ -966,3 +1152,19 @@ async def update_bot_controller_config_endpoint(
         "bot_name": bot_name,
         "result": result,
     }
+
+
+@router.get("/servers/{name}/bots/{bot_name}/controllers/configs")
+async def get_bot_controller_configs_endpoint(
+    name: str,
+    bot_name: str,
+    user: WebUser = Depends(require_server_access),
+):
+    """读取某个 Bot 自己的控制器配置副本，不读取公共模板。"""
+    cm = get_config_manager()
+    client = await cm.get_client(name)
+    try:
+        return await client.controllers.get_bot_controller_configs(bot_name)
+    except Exception as e:
+        logger.exception("Failed to read configs for bot '%s' on '%s'", bot_name, name)
+        raise upstream_error("Failed to read bot controller configs", e)

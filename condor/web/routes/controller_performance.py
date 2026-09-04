@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from condor.fetchers.bot_performance import extract_snapshots as _extract_snapshots
 from condor.fetchers.bot_performance import fetch_all_bot_performance
+from condor.fetchers.controller_performance import enrich_controller_performance
 from condor.web.auth import require_server_access
 from condor.web.models import (
     BotRunInfo,
@@ -32,6 +33,10 @@ def _parse_snapshot(raw: dict) -> ControllerPerformanceSnapshot:
     perf = raw.get("performance", raw)
     if not isinstance(perf, dict):
         perf = {}
+    custom_info = raw.get("custom_info", perf.get("custom_info", {}))
+    if not isinstance(custom_info, dict):
+        custom_info = {}
+    perf, _ = enrich_controller_performance(perf, custom_info)
 
     return ControllerPerformanceSnapshot(
         timestamp=str(raw.get("timestamp", "")),
@@ -47,7 +52,7 @@ def _parse_snapshot(raw: dict) -> ControllerPerformanceSnapshot:
         volume_traded=float(perf.get("volume_traded", 0) or 0),
         close_type_counts=perf.get("close_type_counts", {}),
         positions_summary=perf.get("positions_summary", []),
-        custom_info=perf.get("custom_info", raw.get("custom_info", {})),
+        custom_info=custom_info,
     )
 
 
@@ -273,3 +278,69 @@ async def get_controller_performance_history(
         next_cursor=next_cursor,
         interval=interval,
     )
+
+
+@router.get("/servers/{name}/buy-tracking/history")
+async def get_buy_tracking_history(
+    name: str,
+    bot_name: str = Query(..., min_length=1),
+    controller_id: Optional[str] = Query(None),
+    range: str = Query("1h", pattern="^(1h|3h|6h|12h|24h)$"),
+    user: WebUser = Depends(require_server_access),
+):
+    """Proxy a sampled Microduck buy-tracking time series."""
+    try:
+        client = await get_config_manager().get_client(name)
+        return await client.bot_orchestration._get(
+            "/bot-orchestration/buy-tracking-history",
+            params={"bot_name": bot_name, "controller_id": controller_id, "range": range},
+        )
+    except Exception as e:
+        logger.warning("Failed to fetch buy tracking history from '%s': %s", name, e)
+        return {"status": "error", "range": range, "points": [], "error_hint": str(e)}
+
+
+@router.get("/servers/{name}/strategy-trades")
+async def get_strategy_trades(
+    name: str,
+    bot_name: str = Query(..., min_length=1),
+    controller_id: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    user: WebUser = Depends(require_server_access),
+):
+    """Proxy the confirmed trade records for one Bot/controller."""
+    try:
+        client = await get_config_manager().get_client(name)
+        return await client.bot_orchestration._get(
+            "/bot-orchestration/strategy-trades",
+            params={"bot_name": bot_name, "controller_id": controller_id, "limit": limit},
+        )
+    except Exception as e:
+        logger.warning("Failed to fetch strategy trades from '%s': %s", name, e)
+        return {"status": "error", "trades": [], "error_hint": str(e)}
+
+
+@router.get("/servers/{name}/wallet-ledger")
+async def get_wallet_ledger(
+    name: str,
+    wallet_address: str = Query(..., min_length=1),
+    bot_name: Optional[str] = Query(None, min_length=1),
+    controller_id: Optional[str] = Query(None, min_length=1),
+    limit: int = Query(500, ge=1, le=1000),
+    user: WebUser = Depends(require_server_access),
+):
+    """Proxy this system's aggregated Bot ledger for one wallet."""
+    try:
+        client = await get_config_manager().get_client(name)
+        params = {"wallet_address": wallet_address, "limit": limit}
+        if bot_name:
+            params["bot_name"] = bot_name
+        if controller_id:
+            params["controller_id"] = controller_id
+        return await client.bot_orchestration._get(
+            "/bot-orchestration/wallet-ledger",
+            params=params,
+        )
+    except Exception as e:
+        logger.warning("Failed to fetch wallet ledger from '%s': %s", name, e)
+        return {"status": "error", "summary": {}, "records": [], "error_hint": str(e)}

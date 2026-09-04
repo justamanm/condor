@@ -51,12 +51,12 @@ export function BottomTooltip({ active, payload, label, symbol }: TooltipProps) 
     <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-sm px-2.5 py-2 text-[11px] leading-relaxed shadow-lg min-w-[130px]">
       <div className="text-[var(--color-text-muted)] text-[10px] mb-1">{formatDateTime(label)}</div>
       <div className="flex justify-between gap-3">
-        <span style={{ color: PNL_SERIES_COLORS.volume }}>Volume</span>
+        <span style={{ color: PNL_SERIES_COLORS.volume }}>Cumulative Traded</span>
         <span style={{ color: PNL_SERIES_COLORS.volume }}>{formatCurrencyVolume(byKey.volume ?? 0, symbol)}</span>
       </div>
       {byKey.position !== undefined && byKey.position !== 0 && (
         <div className="flex justify-between gap-3">
-          <span style={{ color: PNL_SERIES_COLORS.position }}>Position</span>
+          <span style={{ color: PNL_SERIES_COLORS.position }}>Held Value</span>
           <span style={{ color: PNL_SERIES_COLORS.position }}>{formatCurrencyVolume(byKey.position, symbol)}</span>
         </div>
       )}

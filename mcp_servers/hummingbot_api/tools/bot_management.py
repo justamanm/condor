@@ -198,7 +198,7 @@ async def get_bot_logs(
 async def manage_bot_execution(
     client: Any,
     bot_name: str,
-    action: Literal["stop_bot", "stop_controllers", "start_controllers"],
+    action: Literal["restart_bot", "stop_bot", "stop_controllers", "start_controllers"],
     controller_names: list[str] | None = None,
 ) -> dict[str, Any]:
     """
@@ -207,7 +207,7 @@ async def manage_bot_execution(
     Args:
         client: Hummingbot API client
         bot_name: Name of the bot to manage
-        action: The action to perform
+        action: The action to perform; restart_bot keeps the same container and state.
         controller_names: List of controller names (required for stop/start_controllers)
 
     Returns:
@@ -216,6 +216,17 @@ async def manage_bot_execution(
     Raises:
         ValueError: If parameters are invalid
     """
+    if action == "restart_bot":
+        result = await client.bot_orchestration._post(
+            f"/bot-orchestration/restart-bot/{bot_name}",
+        )
+        return {
+            "action": "restart_bot",
+            "bot_name": bot_name,
+            "result": result,
+            "message": f"Bot container restarted: {result}",
+        }
+
     if action == "stop_bot":
         result = await client.bot_orchestration.stop_and_archive_bot(bot_name)
         return {

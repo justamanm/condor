@@ -7,13 +7,13 @@
  * is not an admin and hides the panel (there is no `is_admin` claim on the
  * client today). That needs an error that carries its status code, which
  * `apiFetch` deliberately flattens into a message, so this module does its own
- * fetch over the shared `authHeaders`.
+ * fetch over the shared `authFetch`, while preserving the response status.
  *
  * Hiding the panel is cosmetic only. `routes/admin.py` re-reads the role from
  * the ConfigManager on every request and is the actual gate.
  */
 
-import { authHeaders } from "./auth-token";
+import { authFetch } from "./auth-token";
 
 /** An error from an admin route, with the HTTP status preserved. */
 export class AdminApiError extends Error {
@@ -32,11 +32,10 @@ export function isForbidden(error: unknown): boolean {
 }
 
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await authFetch(path, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
       ...(init?.headers as Record<string, string>),
     },
   });

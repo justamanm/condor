@@ -79,3 +79,44 @@ def test_fetch_failure_shared_by_waiters_and_does_not_poison_next_fetch():
         assert sds._inflight == {}
 
     asyncio.run(_drive())
+
+
+def test_refresh_waits_for_old_inflight_then_fetches_post_mutation_value():
+    """修改前启动的旧请求不能在刷新后重新写回缓存。"""
+    calls = {"count": 0}
+    old_started = asyncio.Event()
+    release_old = asyncio.Event()
+
+    async def staged_fetcher(client, **params):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            old_started.set()
+            await release_old.wait()
+            return {"bots": ["old"]}
+        return {"bots": ["new"]}
+
+    async def _drive():
+        sds = ServerDataService()
+
+        async def _fake_get_client(server_name):
+            return object()
+
+        sds._get_client = _fake_get_client
+        sds.register_fetch(ServerDataType.BOTS_STATUS, staged_fetcher)
+
+        old_task = asyncio.create_task(
+            sds.get_or_fetch("srv", ServerDataType.BOTS_STATUS)
+        )
+        await old_started.wait()
+        refresh_task = asyncio.create_task(
+            sds.refresh("srv", ServerDataType.BOTS_STATUS)
+        )
+        await asyncio.sleep(0)
+        release_old.set()
+
+        assert await old_task == {"bots": ["old"]}
+        assert await refresh_task == {"bots": ["new"]}
+        assert sds.get("srv", ServerDataType.BOTS_STATUS) == {"bots": ["new"]}
+        assert calls["count"] == 2
+
+    asyncio.run(_drive())

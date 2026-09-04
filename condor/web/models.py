@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ── Auth ──
 
@@ -93,6 +93,7 @@ class ControllerInfo(BaseModel):
     controller_name: str
     controller_id: str = ""
     bot_name: str
+    bot_display_name: Optional[str] = None
     status: str = "unknown"
     connector: str = ""
     trading_pair: str = ""
@@ -103,12 +104,15 @@ class ControllerInfo(BaseModel):
     volume_traded: float = 0.0
     close_type_counts: dict[str, int] = {}
     positions_summary: list[dict[str, Any]] = []
+    trades: list[dict[str, Any]] = []
     deployed_at: Optional[str] = None
     config: dict[str, Any] = {}
+    custom_info: dict[str, Any] = {}
 
 
 class BotSummary(BaseModel):
     bot_name: str
+    display_name: Optional[str] = None
     status: str = "unknown"
     num_controllers: int = 0
     error_count: int = 0
@@ -372,6 +376,7 @@ class ControllerConfigDetail(BaseModel):
     controller_name: str
     controller_type: str
     config: dict[str, Any]
+    yaml_content: str | None = None
 
 
 class ControllerSourceResponse(BaseModel):
@@ -382,9 +387,11 @@ class ControllerSourceResponse(BaseModel):
 
 class DeployBotRequest(BaseModel):
     bot_name: str
+    display_name: str | None = Field(default=None, max_length=80)
     controllers_config: list[str]
+    controller_overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
     account_name: str = "master_account"
-    image: str = "hummingbot/hummingbot:latest"
+    image: str = "microduck/hummingbot:local"
     max_global_drawdown_quote: float | None = None
     max_controller_drawdown_quote: float | None = None
 

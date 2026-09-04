@@ -3,6 +3,8 @@
 import logging
 from typing import Any, Optional
 
+from condor.fetchers.controller_performance import enrich_controller_performance
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,6 +63,7 @@ def build_bots_page(
     *,
     ctrl_configs: Optional[dict[str, dict]] = None,
     bot_runs: Optional[dict[str, str]] = None,
+    bot_display_names: Optional[dict[str, str]] = None,
     latest_perf: Optional[dict[str, dict]] = None,
 ) -> dict:
     """Transform raw BOTS_STATUS data into a BotsPageResponse-shaped dict.
@@ -78,6 +81,7 @@ def build_bots_page(
     """
     ctrl_configs = ctrl_configs or {}
     bot_runs = bot_runs or {}
+    bot_display_names = bot_display_names or {}
     latest_perf = latest_perf or {}
 
     bots_list = extract_bots_list(raw_status)
@@ -126,6 +130,17 @@ def build_bots_page(
                 live_perf = ctrl_info.get("performance", {})
                 if not isinstance(live_perf, dict):
                     live_perf = {}
+                live_custom = ctrl_info.get("custom_info", {})
+                if not isinstance(live_custom, dict):
+                    live_custom = {}
+                live_perf, live_trades = enrich_controller_performance(
+                    live_perf, live_custom
+                )
+
+                db_custom = db_snap.get("custom_info", {}) if db_snap else {}
+                if not isinstance(db_custom, dict):
+                    db_custom = {}
+                db_perf, db_trades = enrich_controller_performance(db_perf, db_custom)
 
                 # Merge: prefer live data for real-time fields, DB for historical consistency
                 realized = _pick(live_perf, db_perf, "realized_pnl_quote")
@@ -169,29 +184,34 @@ def build_bots_page(
                 display_name = config_cname or ctrl_name
                 display_id = config_id or ctrl_name
 
-                controllers.append(
-                    {
-                        "controller_name": display_name,
-                        "controller_id": display_id,
-                        "bot_name": bot_name,
-                        "status": ctrl_status,
-                        "connector": connector,
-                        "trading_pair": trading_pair,
-                        "realized_pnl_quote": realized,
-                        "unrealized_pnl_quote": unrealized,
-                        "global_pnl_quote": global_pnl,
-                        "global_pnl_pct": global_pnl_pct,
-                        "volume_traded": volume,
-                        "close_type_counts": close_types,
-                        "positions_summary": positions,
-                        "deployed_at": bot_runs.get(bot_name),
-                        "config": ctrl_config,
-                    }
-                )
+                controller_row = {
+                    "controller_name": display_name,
+                    "controller_id": display_id,
+                    "bot_name": bot_name,
+                    "bot_display_name": bot_display_names.get(bot_name),
+                    "status": ctrl_status,
+                    "connector": connector,
+                    "trading_pair": trading_pair,
+                    "realized_pnl_quote": realized,
+                    "unrealized_pnl_quote": unrealized,
+                    "global_pnl_quote": global_pnl,
+                    "global_pnl_pct": global_pnl_pct,
+                    "volume_traded": volume,
+                    "close_type_counts": close_types,
+                    "positions_summary": positions,
+                    "trades": live_trades if live_trades else db_trades,
+                    "deployed_at": bot_runs.get(bot_name),
+                    "config": ctrl_config,
+                }
+                custom_info = live_custom or db_custom
+                if custom_info:
+                    controller_row["custom_info"] = custom_info
+                controllers.append(controller_row)
 
         bots.append(
             {
                 "bot_name": bot_name,
+                "display_name": bot_display_names.get(bot_name),
                 "status": bot_status,
                 "num_controllers": num_controllers,
                 "error_count": len(error_logs),

@@ -1,12 +1,11 @@
-import { authFetch, authHeaders } from "./auth-token";
+import { authFetch } from "./auth-token";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...authHeaders(),
     ...(init?.headers as Record<string, string>),
   };
-  const res = await fetch(path, { ...init, headers });
+  const res = await authFetch(path, { ...init, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Request failed: ${res.status}`);
@@ -65,6 +64,111 @@ export interface PortfolioResponse {
   total_usd: number;
 }
 
+export interface GatewayWalletBalance {
+  address: string;
+  balances: Record<string, string> | null;
+  error: string | null;
+}
+
+export interface GatewayWalletBalancesResponse {
+  chain: string;
+  network: string;
+  tokens: string[];
+  prices: Record<string, string>;
+  wallets: GatewayWalletBalance[];
+}
+
+export interface GatewayWalletAllowancesResponse {
+  spender: string;
+  approvals: Record<string, string>;
+}
+
+export interface GatewayWalletApprovalResponse {
+  [key: string]: unknown;
+}
+
+export interface GatewayWalletApprovalPreviewResponse {
+  status: "success";
+  amount: number;
+  action_count: number;
+  estimated_gas_eth: number;
+  fee_per_gas_gwei: number | null;
+  message: string;
+}
+
+export interface BuyTrackingPoint {
+  timestamp: string;
+  bot_name: string;
+  controller_id: string;
+  current_price_usd: number;
+  trough_price_usd: number;
+  expected_buy_price_usd: number;
+  buy_drawdown_percent: number;
+  current_rebound_percent: number;
+  maximum_rebound_percent: number;
+  expected_buy_drawdown_percent: number;
+}
+
+export interface BuyTrackingHistoryResponse {
+  status: string;
+  range: "1h" | "3h" | "6h" | "12h" | "24h";
+  points: BuyTrackingPoint[];
+  error_hint?: string;
+}
+
+export interface StrategyTradeRecord {
+  timestamp: string;
+  bot_name: string;
+  bot_display_name?: string | null;
+  controller_id: string;
+  side: "BUY" | "SELL" | "APPROVE";
+  record_type: "TRADE" | "APPROVAL";
+  status: "PENDING" | "CONFIRMED" | "FAILED";
+  wallet_address: string | null;
+  base_token: string;
+  quote_token: string;
+  amount_base: number;
+  unit_price_usd: number;
+  total_quote: number;
+  gas_fee_native: number | null;
+  gas_token: string;
+  approval_amount: number | null;
+  transaction_hash: string;
+}
+
+export interface StrategyTradesResponse {
+  status: string;
+  trades: StrategyTradeRecord[];
+  error_hint?: string;
+}
+
+export interface WalletLedgerSummary {
+  microduck_net: number;
+  usdg_net: number;
+  eth_gas: number;
+  unknown_gas_count: number;
+  confirmed_count: number;
+}
+
+export interface WalletApprovalGasEstimate {
+  timestamp: string;
+  wallet_address: string;
+  token: string;
+  approval_amount: number;
+  action_count: number;
+  fee_per_gas_gwei: number | null;
+  estimated_gas_eth: number;
+}
+
+export interface WalletLedgerResponse {
+  status: string;
+  wallet_address: string;
+  summary: WalletLedgerSummary;
+  records: StrategyTradeRecord[];
+  latest_approval_gas_estimate: WalletApprovalGasEstimate | null;
+  error_hint?: string;
+}
+
 export interface PortfolioHistoryPoint {
   timestamp: number;
   total_usd: number;
@@ -99,6 +203,7 @@ export interface ControllerInfo {
   controller_name: string;
   controller_id: string;
   bot_name: string;
+  bot_display_name?: string | null;
   status: string;
   connector: string;
   trading_pair: string;
@@ -109,8 +214,10 @@ export interface ControllerInfo {
   volume_traded: number;
   close_type_counts: Record<string, number>;
   positions_summary: Record<string, unknown>[];
+  trades: Record<string, unknown>[];
   deployed_at: string | null;
   config: Record<string, unknown>;
+  custom_info?: Record<string, unknown>;
 }
 
 export interface BotLogEntry {
@@ -121,7 +228,8 @@ export interface BotLogEntry {
 }
 
 export interface BotSummary {
-  bot_name: string;
+    bot_name: string;
+  display_name?: string | null;
   status: string;
   num_controllers: number;
   error_count: number;
@@ -527,6 +635,7 @@ export interface ControllerConfigDetail {
   controller_name: string;
   controller_type: string;
   config: Record<string, unknown>;
+  yaml_content?: string | null;
 }
 
 export interface ControllerSourceResponse {
@@ -537,7 +646,9 @@ export interface ControllerSourceResponse {
 
 export interface DeployBotRequest {
   bot_name: string;
+  display_name?: string | null;
   controllers_config: string[];
+  controller_overrides?: Record<string, Record<string, unknown>>;
   account_name?: string;
   image?: string;
   max_global_drawdown_quote?: number | null;
@@ -1328,6 +1439,49 @@ export const api = {
       `/api/v1/servers/${encodeURIComponent(server)}/portfolio${refresh ? "?refresh=true" : ""}`,
     ),
 
+  getWalletBalances: (server: string, chain: string, network: string, tokens: string[]) =>
+    apiFetch<GatewayWalletBalancesResponse>(
+      `/api/v1/servers/${encodeURIComponent(server)}/wallet-balances?chain=${encodeURIComponent(chain)}&network=${encodeURIComponent(network)}&tokens=${encodeURIComponent(tokens.join(","))}`,
+    ),
+
+  getWalletAllowances: (
+    server: string,
+    chain: string,
+    network: string,
+    address: string,
+    spender: string,
+    tokens: string[],
+  ) => apiFetch<GatewayWalletAllowancesResponse>(
+    `/api/v1/servers/${encodeURIComponent(server)}/wallet-allowances?chain=${encodeURIComponent(chain)}&network=${encodeURIComponent(network)}&address=${encodeURIComponent(address)}&spender=${encodeURIComponent(spender)}&tokens=${encodeURIComponent(tokens.join(","))}`,
+  ),
+
+  approveWalletToken: (
+    server: string,
+    chain: string,
+    network: string,
+    address: string,
+    spender: string,
+    token: string,
+    amount: string,
+    botName?: string,
+    controllerId?: string,
+  ) => apiFetch<GatewayWalletApprovalResponse>(
+    `/api/v1/servers/${encodeURIComponent(server)}/wallet-approve?chain=${encodeURIComponent(chain)}&network=${encodeURIComponent(network)}&address=${encodeURIComponent(address)}&spender=${encodeURIComponent(spender)}&token=${encodeURIComponent(token)}&amount=${encodeURIComponent(amount)}${botName ? `&bot_name=${encodeURIComponent(botName)}` : ""}${controllerId ? `&controller_id=${encodeURIComponent(controllerId)}` : ""}`,
+    { method: "POST" },
+  ),
+
+  previewWalletTokenApproval: (
+    server: string,
+    chain: string,
+    network: string,
+    address: string,
+    spender: string,
+    token: string,
+    amount: string,
+  ) => apiFetch<GatewayWalletApprovalPreviewResponse>(
+    `/api/v1/servers/${encodeURIComponent(server)}/wallet-approve-preview?chain=${encodeURIComponent(chain)}&network=${encodeURIComponent(network)}&address=${encodeURIComponent(address)}&spender=${encodeURIComponent(spender)}&token=${encodeURIComponent(token)}&amount=${encodeURIComponent(amount)}`,
+  ),
+
   getPortfolioHistory: (server: string, range = "1D", breakdown = false) =>
     apiFetch<PortfolioHistoryResponse>(
       `/api/v1/servers/${encodeURIComponent(server)}/portfolio/history?range=${encodeURIComponent(range)}${breakdown ? "&breakdown=true" : ""}`,
@@ -1361,10 +1515,48 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  getBotControllerConfigs: (server: string, botName: string) =>
+    apiFetch<Record<string, unknown>[]>(
+      `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/controllers/configs`,
+    ),
+
   updateConfigYaml: (server: string, configId: string, yamlContent: string) =>
     apiFetch<{ updated: boolean }>(`/api/v1/servers/${encodeURIComponent(server)}/controllers/configs/${encodeURIComponent(configId)}`, {
       method: "PUT",
       body: JSON.stringify({ yaml_content: yamlContent }),
+    }),
+
+  getExternalPosition: (server: string, configId: string) =>
+    apiFetch<{
+      imported: boolean;
+      config_id: string;
+      position_base?: string;
+      entry_unit_price_usd?: string;
+      transaction_hash?: string | null;
+      wallet_address?: string;
+    }>(`/api/v1/servers/${encodeURIComponent(server)}/controllers/configs/${encodeURIComponent(configId)}/external-position`),
+
+  importExternalPosition: (
+    server: string,
+    configId: string,
+    data: {
+      position_base: string;
+      entry_unit_price_usd: string;
+      transaction_hash?: string;
+    },
+  ) =>
+    apiFetch<{
+      imported: boolean;
+      updated: boolean;
+      config_id: string;
+      wallet_address: string;
+      position_base: string;
+      entry_unit_price_usd: string;
+      wallet_balance: string;
+      allocated_to_other_configs: string;
+    }>(`/api/v1/servers/${encodeURIComponent(server)}/controllers/configs/${encodeURIComponent(configId)}/external-position`, {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 
   getControllerConfigTemplate: (server: string, controllerType: string, controllerName: string) =>
@@ -1406,9 +1598,21 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  updateBotDisplayName: (server: string, botName: string, displayName: string | null) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/display-name`,
+      { method: "PUT", body: JSON.stringify({ display_name: displayName }) },
+    ),
+
   stopBot: (server: string, botName: string) =>
     apiFetch<Record<string, unknown>>(
       `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/stop`,
+      { method: "POST" },
+    ),
+
+  restartBot: (server: string, botName: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/restart`,
       { method: "POST" },
     ),
 
@@ -1447,6 +1651,28 @@ export const api = {
     const q = qs.toString();
     return apiFetch<ControllerPerformanceHistoryResponse>(
       `/api/v1/servers/${encodeURIComponent(server)}/controller-performance/history${q ? `?${q}` : ""}`,
+    );
+  },
+
+  getBuyTrackingHistory: (
+    server: string,
+    botName: string,
+    controllerId: string,
+    range: "1h" | "3h" | "6h" | "12h" | "24h",
+  ) => apiFetch<BuyTrackingHistoryResponse>(
+    `/api/v1/servers/${encodeURIComponent(server)}/buy-tracking/history?bot_name=${encodeURIComponent(botName)}&controller_id=${encodeURIComponent(controllerId)}&range=${range}`,
+  ),
+
+  getStrategyTrades: (server: string, botName: string, controllerId: string) => apiFetch<StrategyTradesResponse>(
+    `/api/v1/servers/${encodeURIComponent(server)}/strategy-trades?bot_name=${encodeURIComponent(botName)}&controller_id=${encodeURIComponent(controllerId)}`,
+  ),
+
+  getWalletLedger: (server: string, walletAddress: string, botName?: string, controllerId?: string) => {
+    const params = new URLSearchParams({ wallet_address: walletAddress });
+    if (botName) params.set("bot_name", botName);
+    if (controllerId) params.set("controller_id", controllerId);
+    return apiFetch<WalletLedgerResponse>(
+      `/api/v1/servers/${encodeURIComponent(server)}/wallet-ledger?${params.toString()}`,
     );
   },
 

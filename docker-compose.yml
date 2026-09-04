@@ -1,0 +1,36 @@
+services:
+  condor:
+    container_name: condor
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:24871:24871"
+    env_file:
+      - .env
+    environment:
+      CONDOR_MODE: local
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: 24871
+      WEB_URL: http://127.0.0.1:24871
+      CONDOR_SERVER_URL_LOCAL: http://hummingbot-api:8000
+      CONDOR_RUNTIME_ROOT: /app/.condor
+      CONDOR_DATA_DIR: /app/data
+      CONDOR_AGENTS_ROOT: /app/agents
+    volumes:
+      - ./config.yml:/app/config.yml
+      - ./audit_log.yml:/app/audit_log.yml
+      - ./.condor:/app/.condor
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./agents:/app/agents
+      - ./routines:/app/routines
+    networks:
+      - microduck
+
+networks:
+  microduck:
+    external: true
+    name: microduck_default

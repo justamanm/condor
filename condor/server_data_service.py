@@ -427,6 +427,25 @@ class ServerDataService:
         # Fetch fresh
         return await self._fetch_and_cache(key)
 
+    async def refresh(
+        self, server: str, data_type: ServerDataType, **params
+    ) -> Optional[Any]:
+        """丢弃旧值并立即重新获取，保证修改前的并发请求不会写回旧数据。"""
+        key = CacheKey.make(server, data_type, **params)
+
+        # 修改前启动的请求可能仍在运行。先等它结束，再删除它写入的旧结果。
+        inflight = self._inflight.get(key)
+        if inflight is not None:
+            try:
+                await inflight
+            except Exception:
+                pass
+            if self._inflight.get(key) is inflight:
+                self._inflight.pop(key, None)
+
+        self._cache.pop(key, None)
+        return await self._fetch_and_cache(key)
+
     def get_entry(
         self, server: str, data_type: ServerDataType, **params
     ) -> Optional[CacheEntry]:

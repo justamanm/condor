@@ -23,6 +23,111 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["portfolio"])
 
 
+@router.get("/servers/{name}/wallet-balances")
+async def get_wallet_balances(
+    name: str,
+    chain: str = Query(..., min_length=1),
+    network: str = Query(..., min_length=1),
+    tokens: str = Query(..., min_length=1),
+    user: WebUser = Depends(require_server_access),
+):
+    """Proxy per-wallet Gateway balances through the authenticated server client."""
+    try:
+        client = await get_config_manager().get_client(name)
+        return await client.accounts._get(
+            "/accounts/gateway/wallet-balances",
+            params={"chain": chain, "network": network, "tokens": tokens},
+        )
+    except Exception as e:
+        logger.warning("Wallet balance fetch exception for %s: %s", name, e)
+        raise HTTPException(status_code=502, detail=f"Failed to get wallet balances: {e}")
+
+
+@router.get("/servers/{name}/wallet-allowances")
+async def get_wallet_allowances(
+    name: str,
+    chain: str = Query(..., min_length=1),
+    network: str = Query(..., min_length=1),
+    address: str = Query(..., min_length=1),
+    spender: str = Query(..., min_length=1),
+    tokens: str = Query(..., min_length=1),
+    user: WebUser = Depends(require_server_access),
+):
+    """Proxy a wallet's read-only Gateway token allowances."""
+    try:
+        client = await get_config_manager().get_client(name)
+        return await client.accounts._get(
+            "/accounts/gateway/wallet-allowances",
+            params={
+                "chain": chain,
+                "network": network,
+                "address": address,
+                "spender": spender,
+                "tokens": tokens,
+            },
+        )
+    except Exception as e:
+        logger.warning("Wallet allowance fetch exception for %s: %s", name, e)
+        raise HTTPException(status_code=502, detail=f"Failed to get wallet allowances: {e}")
+
+
+@router.post("/servers/{name}/wallet-approve")
+async def approve_wallet_token(
+    name: str,
+    chain: str = Query(..., min_length=1),
+    network: str = Query(..., min_length=1),
+    address: str = Query(..., min_length=1),
+    spender: str = Query(..., min_length=1),
+    token: str = Query(..., min_length=1),
+    amount: str = Query(..., min_length=1),
+    bot_name: str | None = Query(default=None, min_length=1),
+    controller_id: str | None = Query(default=None, min_length=1),
+    user: WebUser = Depends(require_server_access),
+):
+    """Forward one explicitly confirmed token approval to Hummingbot API."""
+    try:
+        client = await get_config_manager().get_client(name)
+        return await client.accounts._post(
+            "/accounts/gateway/wallet-approve",
+            params={
+                "chain": chain,
+                "network": network,
+                "address": address,
+                "spender": spender,
+                "token": token,
+                "amount": amount,
+                **({"bot_name": bot_name} if bot_name else {}),
+                **({"controller_id": controller_id} if controller_id else {}),
+            },
+        )
+    except Exception as e:
+        logger.warning("Wallet approval submit exception for %s: %s", name, e)
+        raise HTTPException(status_code=502, detail=f"提交 USDG 授权失败: {e}")
+
+
+@router.get("/servers/{name}/wallet-approve-preview")
+async def preview_wallet_token_approval(
+    name: str,
+    chain: str = Query(..., min_length=1),
+    network: str = Query(..., min_length=1),
+    address: str = Query(..., min_length=1),
+    spender: str = Query(..., min_length=1),
+    token: str = Query(..., min_length=1),
+    amount: str = Query(..., min_length=1),
+    user: WebUser = Depends(require_server_access),
+):
+    """Read-only preview of the approval calls and their current Gas estimate."""
+    try:
+        client = await get_config_manager().get_client(name)
+        return await client.accounts._get(
+            "/accounts/gateway/wallet-approve-preview",
+            params={"chain": chain, "network": network, "address": address, "spender": spender, "token": token, "amount": amount},
+        )
+    except Exception as e:
+        logger.warning("Wallet approval preview exception for %s: %s", name, e)
+        raise HTTPException(status_code=502, detail=f"无法预估 USDG 授权 Gas: {e}")
+
+
 @router.get("/servers/{name}/portfolio", response_model=PortfolioResponse)
 async def get_portfolio(
     name: str,

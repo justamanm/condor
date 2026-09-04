@@ -206,3 +206,21 @@ def test_hung_step_is_killed_rather_than_waited_on():
     rc, output = asyncio.run(updater._run_cmd("bash", "-c", "sleep 30", timeout=0.5))
     assert rc == 124
     assert "Timed out" in output
+
+
+def test_command_resolution_uses_current_path_first():
+    with patch.object(updater.shutil, "which", return_value="/custom/bin/docker"):
+        assert updater._resolve_command("docker") == "/custom/bin/docker"
+
+
+def test_command_resolution_checks_common_macos_directories():
+    with (
+        patch.object(updater.shutil, "which", return_value=None),
+        patch.object(
+            updater.os.path,
+            "isfile",
+            side_effect=lambda path: path == "/usr/local/bin/docker",
+        ),
+        patch.object(updater.os, "access", return_value=True),
+    ):
+        assert updater._resolve_command("docker") == "/usr/local/bin/docker"

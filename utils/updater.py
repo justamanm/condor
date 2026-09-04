@@ -14,6 +14,7 @@ pane it was started in.
 import asyncio
 import logging
 import os
+import shutil
 import signal
 import sys
 
@@ -39,13 +40,34 @@ DEPS_TIMEOUT = 900
 FRONTEND_BUILD_TIMEOUT = 1200
 DOCKER_TIMEOUT = 1800
 
+_COMMON_COMMAND_DIRS = (
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+)
+
+
+def _resolve_command(command: str) -> str:
+    """在精简 PATH 的后台进程中也能找到常见的本机命令。"""
+    if os.path.dirname(command):
+        return command
+    resolved = shutil.which(command)
+    if resolved:
+        return resolved
+    for directory in _COMMON_COMMAND_DIRS:
+        candidate = os.path.join(directory, command)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return command
+
 
 async def _run_cmd(
     *args: str, cwd: str | None = None, timeout: float | None = None
 ) -> tuple[int, str]:
     """Run a command and return (returncode, stdout)."""
+    resolved_args = (_resolve_command(args[0]), *args[1:])
     proc = await asyncio.create_subprocess_exec(
-        *args,
+        *resolved_args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         stdin=asyncio.subprocess.DEVNULL,
