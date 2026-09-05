@@ -213,6 +213,14 @@ export function ConfigEditor({
         next.buy_trailing_rebound_max_percent = "5";
         changed = true;
       }
+      if (!("buy_trailing_check_interval" in config) && !("buy_trailing_check_interval" in next)) {
+        next.buy_trailing_check_interval = "1";
+        changed = true;
+      }
+      if (!("sell_trailing_check_interval" in config) && !("sell_trailing_check_interval" in next)) {
+        next.sell_trailing_check_interval = "2";
+        changed = true;
+      }
       return changed ? next : previous;
     });
   }, [config, data, isMicroduck]);
