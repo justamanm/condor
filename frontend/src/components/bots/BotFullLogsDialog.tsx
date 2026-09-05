@@ -66,7 +66,12 @@ export function BotFullLogsDialog({ server, botName, displayName, onClose }: {
   );
   const latest = logsQuery.data?.pages[0];
 
-  return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+  return <div
+    className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+    onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}
+  >
     <div
       className="flex h-[82vh] min-w-[min(720px,95vw)] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] shadow-2xl"
       style={{ width: "min(1100px, 90vw)", resize: "horizontal" }}
