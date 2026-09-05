@@ -1278,7 +1278,7 @@ export function ActiveBotsTab({
     setSystemNotificationTestPending(true);
     setNotificationTestResult(null);
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
     try {
       const response = await fetch("http://127.0.0.1:24873/test", {
         method: "POST",
