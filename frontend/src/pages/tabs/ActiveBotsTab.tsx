@@ -1626,12 +1626,17 @@ export function ActiveBotsTab({
     botName: string;
     controllerId: string;
   }>();
+  const walletApprovalPlanFailures = new Set<string>();
   for (const item of botStrategyItems) {
-    if (!item.walletAddress || item.expectedInvestmentUsd === null) continue;
-    // 已持仓、卖出中或已结束的策略不会再次使用 USDG 买入，不能继续占用钱包授权额度。
+    if (!item.walletAddress) continue;
     const controllerState = String(item.controller.custom_info?.state ?? "").toLowerCase();
-    if (["holding", "trailing", "selling", "completed", "external_exit"].includes(controllerState)) continue;
+    // 只有明确结束的 Bot 释放配置额度；运行中的持仓、跟踪和卖出状态仍保留它们的额度。
+    if (["completed", "external_exit"].includes(controllerState)) continue;
     const key = item.walletAddress.toLowerCase();
+    if (item.expectedInvestmentUsd === null) {
+      walletApprovalPlanFailures.add(key);
+      continue;
+    }
     const previous = walletApprovalPlans.get(key);
     walletApprovalPlans.set(key, {
       expectedInvestmentUsd: (previous?.expectedInvestmentUsd ?? 0) + item.expectedInvestmentUsd,
@@ -1670,8 +1675,10 @@ export function ActiveBotsTab({
     const usdgAllowance = usdgAllowanceByWallet.get(addressKey) ?? null;
     // 授权为同一钱包共享：已占用是所有仍可能买入的 Bot 的计划投入；
     // 可用额度只表示还能分配给其他 Bot 的授权，不代表钱包实际 USDG 余额。
-    const occupiedAllowance = approvalPlan?.expectedInvestmentUsd ?? 0;
-    const availableAllowance = usdgAllowance === null
+    const occupiedAllowance = walletApprovalPlanFailures.has(addressKey)
+      ? null
+      : approvalPlan?.expectedInvestmentUsd ?? 0;
+    const availableAllowance = usdgAllowance === null || occupiedAllowance === null
       ? null
       : Math.max(0, usdgAllowance - occupiedAllowance);
     return {
@@ -2084,16 +2091,16 @@ export function ActiveBotsTab({
                             : `${wallet.usdgAllowance.toFixed(6)} USDG`}
                       </div>
                       <div className="mt-1 whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
-                        已占用额度 {wallet.occupiedAllowance.toFixed(6)} USDG
+                        已占用额度 {wallet.occupiedAllowance === null ? "获取失败" : `${wallet.occupiedAllowance.toFixed(6)} USDG`}
                       </div>
                       <div className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
-                        可用额度 {wallet.availableAllowance === null ? "暂未获取" : `${wallet.availableAllowance.toFixed(6)} USDG`}
+                        可用额度 {wallet.occupiedAllowance === null ? "获取失败" : wallet.availableAllowance === null ? "暂未获取" : `${wallet.availableAllowance.toFixed(6)} USDG`}
                       </div>
                       <UsdgAllowanceEditor
                         server={server}
                         walletAddress={wallet.address}
                         currentAllowance={wallet.usdgAllowance}
-                        suggestedAmount={wallet.approvalPlan?.expectedInvestmentUsd ?? null}
+                        suggestedAmount={wallet.occupiedAllowance}
                         ethUsdPrice={wallet.ethUsdPrice}
                         botName={wallet.approvalPlan?.botName}
                         controllerId={wallet.approvalPlan?.controllerId}
