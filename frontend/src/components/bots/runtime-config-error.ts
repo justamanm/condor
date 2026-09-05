@@ -10,7 +10,7 @@ const FIELD_RULES: Array<{ marker: string; fields: string[] }> = [
   },
   {
     marker: "跟踪阶段的检查间隔必须短于普通阶段",
-    fields: ["normal_check_interval", "trailing_check_interval"],
+    fields: ["normal_check_interval", "buy_trailing_check_interval", "sell_trailing_check_interval"],
   },
 ];
 

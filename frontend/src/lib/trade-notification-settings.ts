@@ -3,11 +3,13 @@ export const TRADE_NOTIFICATION_SETTINGS_KEY = "microduck.tradeNotificationSetti
 export interface TradeNotificationSettings {
   browserEnabled: boolean;
   systemEnabled: boolean;
+  showBotCharts: boolean;
 }
 
 export const DEFAULT_TRADE_NOTIFICATION_SETTINGS: TradeNotificationSettings = {
   browserEnabled: true,
   systemEnabled: true,
+  showBotCharts: true,
 };
 
 export function readTradeNotificationSettings(): TradeNotificationSettings {
@@ -17,6 +19,7 @@ export function readTradeNotificationSettings(): TradeNotificationSettings {
     return {
       browserEnabled: stored.browserEnabled !== false,
       systemEnabled: stored.systemEnabled !== false,
+      showBotCharts: stored.showBotCharts !== false,
     };
   } catch {
     return DEFAULT_TRADE_NOTIFICATION_SETTINGS;

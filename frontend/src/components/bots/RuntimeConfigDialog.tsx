@@ -16,7 +16,7 @@ const SAFE_FIELDS = [
   "buy_trailing_rebound_adjustment_factor", "buy_trailing_rebound_max_percent",
   "sell_profit_multiple", "sell_price_max_usd", "sell_price_downward_tolerance_usd",
   "sell_trailing_drop_mode", "sell_trailing_drop_usd", "sell_trailing_drop_percent",
-  "normal_check_interval", "trailing_check_interval", "status_log_interval_seconds", "live_trading", "auto_start_next_cycle",
+  "normal_check_interval", "buy_trailing_check_interval", "sell_trailing_check_interval", "status_log_interval_seconds", "live_trading", "auto_start_next_cycle",
   "price_query_group",
 ] as const;
 
@@ -30,7 +30,9 @@ const FIELD_LABELS: Record<string, string> = {
   sell_profit_multiple: "卖出利润倍数", sell_price_max_usd: "卖出价格上限",
   sell_price_downward_tolerance_usd: "卖出向下容差", sell_trailing_drop_mode: "卖出回落模式",
   sell_trailing_drop_usd: "卖出回落固定值", sell_trailing_drop_percent: "卖出回落百分比",
-  normal_check_interval: "普通检查间隔（秒）", trailing_check_interval: "跟踪检查间隔（秒）",
+  normal_check_interval: "普通检查间隔（秒）",
+  buy_trailing_check_interval: "买入跟踪检查间隔（秒）",
+  sell_trailing_check_interval: "卖出跟踪检查间隔（秒）",
   status_log_interval_seconds: "状态日志间隔（秒）", live_trading: "真实交易",
   auto_start_next_cycle: "卖出后自动开始下一轮",
   price_query_group: "报价分组",
@@ -52,7 +54,8 @@ const FIELD_UNITS: Record<string, string> = {
   sell_trailing_drop_usd: "美元 / MICRODUCK",
   sell_trailing_drop_percent: "%",
   normal_check_interval: "秒",
-  trailing_check_interval: "秒",
+  buy_trailing_check_interval: "秒",
+  sell_trailing_check_interval: "秒",
   status_log_interval_seconds: "秒",
 };
 
@@ -74,6 +77,8 @@ export function RuntimeConfigDialog({ open, server, botName, botDisplayName, con
     );
     if (!found) return found;
     return found.controller_name === "microduck_profit_trailing" ? {
+      buy_trailing_check_interval: found.buy_trailing_check_interval ?? found.trailing_check_interval ?? 2,
+      sell_trailing_check_interval: found.sell_trailing_check_interval ?? found.trailing_check_interval ?? 2,
       buy_trailing_rebound_adjustment_factor: 0.5,
       buy_trailing_rebound_max_percent: 10,
       auto_start_next_cycle: false,

@@ -40,7 +40,7 @@ export const MICRODUCK_DEPLOY_KEYS = new Set([
   "buy_trailing_rebound_adjustment_factor", "buy_trailing_rebound_max_percent",
   "sell_profit_multiple", "sell_price_max_usd", "sell_trailing_drop_mode",
   "sell_price_downward_tolerance_usd", "sell_trailing_drop_usd", "sell_trailing_drop_percent",
-  "price_query_group",
+  "normal_check_interval", "buy_trailing_check_interval", "sell_trailing_check_interval", "price_query_group",
 ]);
 
 export const MICRODUCK_FIELD_INFO: Record<string, { label: string; description: string }> = {
@@ -63,6 +63,9 @@ export const MICRODUCK_FIELD_INFO: Record<string, { label: string; description: 
   sell_trailing_drop_mode: { label: "卖出回落方式", description: "百分比：按最高价的一定比例回落；固定金额：按固定美元金额回落。" },
   sell_trailing_drop_usd: { label: "卖出回落金额", description: "使用固定金额方式时，价格从最高点回落多少美元后卖出。" },
   sell_trailing_drop_percent: { label: "卖出回落比例", description: "使用百分比方式时，价格从最高点回落多少百分比后卖出。例如 5 表示 5%。" },
+  normal_check_interval: { label: "普通检查间隔", description: "未进入买入或卖出跟踪时的价格检查间隔。单位：秒。" },
+  buy_trailing_check_interval: { label: "买入跟踪检查间隔", description: "进入买入跟踪后检查价格的间隔。默认 2 秒。" },
+  sell_trailing_check_interval: { label: "卖出跟踪检查间隔", description: "进入卖出跟踪后检查价格的间隔。默认 2 秒。" },
   price_query_group: { label: "报价分组", description: "留空时独立查询。同名 Bot 会共享日常跟踪报价；下单前仍各自重新报价和校验。" },
 };
 
@@ -74,6 +77,7 @@ const FIELD_UNITS: Record<string, string> = {
   sell_profit_multiple: "倍", sell_price_max_usd: "美元 / MICRODUCK",
   sell_price_downward_tolerance_usd: "美元 / MICRODUCK", sell_trailing_drop_usd: "美元 / MICRODUCK",
   sell_trailing_drop_percent: "%",
+  normal_check_interval: "秒", buy_trailing_check_interval: "秒", sell_trailing_check_interval: "秒",
 };
 
 export function inferInputType(value: unknown): "number" | "boolean" | "text" | "json" {
