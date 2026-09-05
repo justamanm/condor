@@ -43,8 +43,12 @@ export function BotFullLogsDialog({ server, botName, displayName, onClose }: {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<BotLogCategory>("all");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [customStart, setCustomStart] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return localDateTime(today).slice(0, 16);
+  });
+  const [customEnd, setCustomEnd] = useState(() => localDateTime(new Date()).slice(0, 16));
   const logsQuery = useInfiniteQuery({
     queryKey: ["bot-full-logs", server, botName, logType, query, category, timeRange, customStart, customEnd],
     initialPageParam: 0,
