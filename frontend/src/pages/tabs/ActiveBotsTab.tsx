@@ -1423,7 +1423,6 @@ export function ActiveBotsTab({
 
   const serverOnline = data?.server_online !== false;
   const errorHint = data?.error_hint;
-  const activeBots = bots.filter((b) => b.status === "running" || b.status === "stopping").length;
   const configNames = (availableConfigs?.configs ?? [])
     .map((config) => config.id)
     .sort((a, b) => a.localeCompare(b));
@@ -1505,17 +1504,23 @@ export function ActiveBotsTab({
       : estimatedSellLower;
     const displayedSellLower = usesFinalSellTargetTolerance ? estimatedSellLower : legacySellLower;
     const displayedSellUpper = usesFinalSellTargetTolerance ? estimatedSellUpper : legacySellLower;
-    // 未买入时按最高允许买入价估算，已持仓时按实际买入价估算；卖出始终采用
-    // 已扣除卖出容差后的下沿价格，展示较保守的预计利润率。
+    // 涨跌幅和预计利润统一以未加减容差的配置目标价为基准。
     const expectedProfitBuyPrice = ["holding", "trailing", "selling"].includes(controllerState)
       && Number.isFinite(entryPrice) && entryPrice > 0
       ? entryPrice
-      : configuredBuyPriceUpper;
+      : configuredBuyPrice;
     const expectedProfitPercent = expectedProfitBuyPrice !== null
-      && displayedSellLower !== null
+      && estimatedSellUpper !== null
       && expectedProfitBuyPrice > 0
-      ? (displayedSellLower / expectedProfitBuyPrice - 1) * 100
+      ? (estimatedSellUpper / expectedProfitBuyPrice - 1) * 100
       : null;
+    const plannedProfitBasisUsd = buyMode === "quantity"
+      ? configuredBuyPrice !== null && Number.isFinite(buySize) && buySize > 0
+        ? buySize * configuredBuyPrice
+        : null
+      : Number.isFinite(buySize) && buySize > 0
+        ? buySize
+        : null;
     const expectedInvestmentUsd = buyMode === "quantity"
       ? configuredBuyPriceUpper !== null && Number.isFinite(buySize) && buySize > 0
         ? buySize * configuredBuyPriceUpper
@@ -1546,9 +1551,19 @@ export function ActiveBotsTab({
         : Number.isFinite(currentUnitPrice) && currentUnitPrice > 0
           ? validManagedAmount * currentUnitPrice
           : null;
+    const expectedProfitBasisUsd = ["holding", "trailing", "selling"].includes(controllerState)
+      && Number.isFinite(entryPrice) && entryPrice > 0
+      && validManagedAmount > 0
+      ? entryPrice * validManagedAmount
+      : plannedProfitBasisUsd;
+    const expectedProfitUsd = expectedProfitBasisUsd !== null && expectedProfitPercent !== null
+      ? expectedProfitBasisUsd * expectedProfitPercent / 100
+      : null;
     const quote = controller.trading_pair?.split("-")[1] || "USDT";
+    const pnlUsd = Number(controller.global_pnl_quote);
     const convertedPnl = convert(controller.global_pnl_quote, quote);
-    const tradeHistory = Array.isArray(custom.trade_history)
+    const hasTradeHistory = Array.isArray(custom.trade_history);
+    const tradeHistory = hasTradeHistory
       ? custom.trade_history as Record<string, unknown>[]
       : [];
     const latestTradePrice = (side: "BUY" | "SELL") => {
@@ -1568,8 +1583,10 @@ export function ActiveBotsTab({
       const value = Number(trade.total_usd);
       return Number.isFinite(value) && value >= 0 ? total + value : total;
     }, 0);
-    const convertedBuyVolume = convert(tradeVolume("BUY"), quote);
-    const convertedSellVolume = convert(tradeVolume("SELL"), quote);
+    const buyVolumeUsd = tradeVolume("BUY");
+    const sellVolumeUsd = tradeVolume("SELL");
+    const convertedBuyVolume = convert(buyVolumeUsd, quote);
+    const convertedSellVolume = convert(sellVolumeUsd, quote);
     const tradeState = summary.tradeState === "multiple"
       ? "状态不同"
       : summary.tradeState || "暂未获取";
@@ -1600,16 +1617,61 @@ export function ActiveBotsTab({
       usdgAllowance,
       usdgAllowanceInsufficient,
       expectedInvestmentUsd,
+      expectedProfitBasisUsd,
+      expectedProfitUsd,
       managedAmount: validManagedAmount,
       managedValueUsd,
       pnl: convertedPnl.value,
+      pnlUsd: Number.isFinite(pnlUsd) ? pnlUsd : null,
       buyVolume: convertedBuyVolume.value,
       sellVolume: convertedSellVolume.value,
+      buyVolumeUsd,
+      sellVolumeUsd,
+      hasTradeHistory,
       tradeState,
       profitPercent,
       profitPercentColor,
     };
   });
+
+  const runningBotNames = new Set(
+    bots.filter((bot) => bot.status === "running").map((bot) => bot.bot_name),
+  );
+  const runningStrategyItems = botStrategyItems.filter((item) =>
+    runningBotNames.has(item.controller.bot_name),
+  );
+  const sumRunning = (select: (item: typeof runningStrategyItems[number]) => number) =>
+    runningStrategyItems.reduce((total, item) => total + select(item), 0);
+  const currentProfitComplete = runningStrategyItems.every((item) =>
+    item.pnlUsd !== null && item.hasTradeHistory,
+  );
+  const currentProfitUsd = sumRunning((item) => item.pnlUsd ?? 0);
+  const currentProfitBasisUsd = sumRunning((item) => item.buyVolumeUsd);
+  const currentProfitRate = currentProfitComplete && currentProfitBasisUsd > 0
+    ? currentProfitUsd / currentProfitBasisUsd * 100
+    : null;
+  const expectedProfitComplete = runningStrategyItems.every((item) =>
+    item.expectedProfitBasisUsd !== null && item.expectedProfitUsd !== null,
+  );
+  const expectedProfitUsd = sumRunning((item) => item.expectedProfitUsd ?? 0);
+  const expectedProfitBasisUsd = sumRunning((item) => item.expectedProfitBasisUsd ?? 0);
+  const expectedProfitRate = expectedProfitComplete && expectedProfitBasisUsd > 0
+    ? expectedProfitUsd / expectedProfitBasisUsd * 100
+    : null;
+  const totalManagedAmount = sumRunning((item) => item.managedAmount);
+  const managedValueComplete = runningStrategyItems.every((item) =>
+    item.managedAmount <= 0 || item.managedValueUsd !== null,
+  );
+  const totalManagedValueUsd = sumRunning((item) => item.managedValueUsd ?? 0);
+  const totalBuyVolumeUsd = sumRunning((item) => item.buyVolumeUsd);
+  const totalSellVolumeUsd = sumRunning((item) => item.sellVolumeUsd);
+  const tradeVolumeComplete = runningStrategyItems.every((item) => item.hasTradeHistory);
+  const signedPercent = (value: number | null) => value === null
+    ? "暂未获取"
+    : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+  const signedUsd = (value: number, complete = true) => complete
+    ? `${value >= 0 ? "+" : "-"}$${Math.abs(value).toFixed(2)}`
+    : "部分数据未获取";
 
   // 下方日志区按状态栏中策略卡片的顺序排列。同一 Bot 有多个控制器时，
   // 取它最靠前的控制器位置，保证拖动状态栏后日志区立即跟随。
@@ -1728,7 +1790,7 @@ export function ActiveBotsTab({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
         <StatCard
           label="最新价格"
           value={(
@@ -1738,28 +1800,59 @@ export function ActiveBotsTab({
             </span>
           )}
         />
-        <StatCard label="运行中机器人" value={String(activeBots)} />
-        <StatCard label="控制器数量" value={String(controllers.length)} />
         <StatCard
-          label="配置文件"
+          label="当前实时总利润"
           value={(
-            <span className="block min-w-0">
-              <span className="block whitespace-nowrap text-sm font-bold text-[var(--color-text)]">
-                {configSummary}
+            <span>
+              <span className="block text-base">{signedPercent(currentProfitRate)}</span>
+              <span className="mt-1 block text-xs font-normal">{signedUsd(currentProfitUsd, currentProfitComplete)}</span>
+            </span>
+          )}
+          valueColor={currentProfitComplete ? pnlColor(currentProfitUsd) : undefined}
+        />
+        <StatCard
+          label="预计总利润"
+          value={(
+            <span>
+              <span className="block text-base">{signedPercent(expectedProfitRate)}</span>
+              <span className="mt-1 block text-xs font-normal">{signedUsd(expectedProfitUsd, expectedProfitComplete)}</span>
+            </span>
+          )}
+          valueColor={expectedProfitComplete ? pnlColor(expectedProfitUsd) : undefined}
+        />
+        <StatCard
+          label="当前总持仓"
+          value={(
+            <span>
+              <span className="block text-base">{totalManagedAmount.toLocaleString("en-US", { maximumFractionDigits: 1 })} MICRODUCK</span>
+              <span className="mt-1 block text-xs font-normal">
+                {managedValueComplete ? `$${totalManagedValueUsd.toFixed(2)}` : "部分价值未获取"}
               </span>
-              {configNames.length > 0 && (
-                <span
-                  className="mt-1 block truncate whitespace-nowrap text-xs font-normal text-[var(--color-text-muted)]"
-                  title={configNames.map((id) => configDisplayInfo(id).tooltip).join("\n\n")}
-                >
-                  {configNames.map((id) => configDisplayInfo(id).name).join("、")}
-                </span>
-              )}
             </span>
           )}
         />
+        <StatCard
+          label="累计买入"
+          value={tradeVolumeComplete ? `$${totalBuyVolumeUsd.toFixed(2)}` : "部分数据未获取"}
+        />
+        <StatCard
+          label="累计卖出"
+          value={tradeVolumeComplete ? `$${totalSellVolumeUsd.toFixed(2)}` : "部分数据未获取"}
+        />
       </div>
-
+      <div className="flex flex-wrap gap-x-5 gap-y-1 px-1 text-xs text-[var(--color-text-muted)]">
+        <span>运行中 Bot：{runningBotNames.size}</span>
+        <span>运行中控制器：{runningStrategyItems.length}</span>
+        <span>配置文件：{configSummary}</span>
+        {configNames.length > 0 && (
+          <span
+            className="max-w-full truncate"
+            title={configNames.map((id) => configDisplayInfo(id).tooltip).join("\n\n")}
+          >
+            {configNames.map((id) => configDisplayInfo(id).name).join("、")}
+          </span>
+        )}
+      </div>
       <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-base font-semibold text-[var(--color-text)]">Bot 状态</h3>
