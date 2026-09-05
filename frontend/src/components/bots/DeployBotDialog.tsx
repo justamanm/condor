@@ -139,7 +139,7 @@ export function ConfigEditor({
       ? {
           buy_size_mode: "quantity",
           buy_amount_base: 1,
-          buy_trailing_rebound_adjustment_factor: 0.5,
+          buy_trailing_rebound_adjustment_factor: 0.2,
           buy_trailing_rebound_max_percent: 5,
           auto_start_next_cycle: false,
           price_query_group: "",
@@ -206,7 +206,7 @@ export function ConfigEditor({
         changed = true;
       }
       if (!("buy_trailing_rebound_adjustment_factor" in config) && !("buy_trailing_rebound_adjustment_factor" in next)) {
-        next.buy_trailing_rebound_adjustment_factor = "0.5";
+        next.buy_trailing_rebound_adjustment_factor = "0.2";
         changed = true;
       }
       if (!("buy_trailing_rebound_max_percent" in config) && !("buy_trailing_rebound_max_percent" in next)) {
