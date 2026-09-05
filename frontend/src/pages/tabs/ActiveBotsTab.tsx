@@ -1848,7 +1848,7 @@ export function ActiveBotsTab({
                       </span>
                     </div>
                   </div>
-                  <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[repeat(12,minmax(0,1fr))] 2xl:[&>div+div]:border-l 2xl:[&>div+div]:border-[var(--color-border)] 2xl:[&>div+div]:pl-5 2xl:[&>div:nth-child(2)]:pl-8">
+                  <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[repeat(12,minmax(0,1fr))] 2xl:gap-x-0 2xl:[&>div+div]:border-l 2xl:[&>div+div]:border-[var(--color-border)] 2xl:[&>div+div]:pl-3">
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">当前持仓</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text)]">
