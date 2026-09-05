@@ -4,6 +4,7 @@ import { arrayMove, SortableContext, rectSortingStrategy, useSortable, verticalL
 import { CSS } from "@dnd-kit/utilities";
 import {
   Bot,
+  BellRing,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -18,7 +19,7 @@ import {
   Settings,
   Square,
 } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { NoServerCard } from "@/components/NoServerCard";
 import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
@@ -47,6 +48,7 @@ import {
 import { formatCurrencyVolume, pnlColor } from "@/lib/formatters";
 import { controllerStrategySummary } from "@/lib/controller-strategy-summary";
 import { latestPositionPrice } from "@/lib/latest-position-price";
+import { browserTradeNotifications } from "@/lib/trade-browser-notifications";
 import { configDisplayInfo } from "@/lib/config-display";
 
 function formatUptime(deployedAt: string | null): string {
@@ -1039,6 +1041,12 @@ export function ActiveBotsTab({
   const [pendingStopBots, setPendingStopBots] = useState<Set<string>>(new Set());
   const [pageNow, setPageNow] = useState(() => Date.now());
   const [latestPriceReceivedAt, setLatestPriceReceivedAt] = useState<number | null>(null);
+  const [tradeNotificationPermission, setTradeNotificationPermission] = useState<NotificationPermission | "unsupported">(() =>
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported",
+  );
+  const seenTradeNotifications = useRef<Set<string>>(new Set());
+  const tradeNotificationServer = useRef<string | null>(null);
+  const tradeNotificationBaselineReady = useRef(false);
   const [walletAliases, setWalletAliases] = useState<Record<string, string>>(() => {
     try { return JSON.parse(window.localStorage.getItem("microduck.walletAliases") || "{}"); } catch { return {}; }
   });
@@ -1201,6 +1209,41 @@ export function ActiveBotsTab({
     }
     return Array.from(seen.values());
   }, [data?.controllers]);
+
+  useEffect(() => {
+    // 等首批 Bot 数据到达后再建立基线，避免把页面加载前的历史成交误报为新成交。
+    if (!data) return;
+    if (tradeNotificationServer.current !== server) {
+      tradeNotificationServer.current = server;
+      seenTradeNotifications.current.clear();
+      tradeNotificationBaselineReady.current = false;
+    }
+    const notifications = browserTradeNotifications(controllers);
+    if (!tradeNotificationBaselineReady.current) {
+      notifications.forEach((item) => seenTradeNotifications.current.add(item.key));
+      tradeNotificationBaselineReady.current = true;
+      return;
+    }
+    for (const item of notifications) {
+      if (seenTradeNotifications.current.has(item.key)) continue;
+      seenTradeNotifications.current.add(item.key);
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification(item.title, { body: item.body, tag: item.key });
+        } catch {
+          // 系统通知失败不能影响 Bot 页面和交易状态刷新。
+        }
+      }
+    }
+  }, [controllers, data, server]);
+
+  const requestTradeNotificationPermission = useCallback(async () => {
+    if (!("Notification" in window)) {
+      setTradeNotificationPermission("unsupported");
+      return;
+    }
+    setTradeNotificationPermission(await Notification.requestPermission());
+  }, []);
 
   // 控制器的展示名可能是中文，而配置 ID 才包含 microduck；统一按多个可用字段识别。
   const buyTrackingControllers = useMemo(() => controllers.filter((controller) =>
@@ -1664,7 +1707,25 @@ export function ActiveBotsTab({
       </div>
 
       <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-        <h3 className="mb-3 text-base font-semibold text-[var(--color-text)]">Bot 状态</h3>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="text-base font-semibold text-[var(--color-text)]">Bot 状态</h3>
+          {tradeNotificationPermission === "granted" ? (
+            <span className="inline-flex items-center gap-1 text-xs text-[var(--color-green)]" title="页面打开时，新确认的买入和卖出会发送浏览器通知">
+              <BellRing className="h-3.5 w-3.5" />成交通知已启用
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={requestTradeNotificationPermission}
+              disabled={tradeNotificationPermission === "unsupported" || tradeNotificationPermission === "denied"}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
+              title={tradeNotificationPermission === "denied" ? "浏览器已阻止通知，请在网站权限设置中重新允许" : tradeNotificationPermission === "unsupported" ? "当前浏览器不支持系统通知" : "启用买入、卖出确认后的浏览器系统通知"}
+            >
+              <BellRing className="h-3.5 w-3.5" />
+              {tradeNotificationPermission === "denied" ? "成交通知已被阻止" : tradeNotificationPermission === "unsupported" ? "浏览器不支持通知" : "启用成交通知"}
+            </button>
+          )}
+        </div>
         {botStrategyItems.length ? (
           <DndContext sensors={sortableSensors} collisionDetection={closestCenter} onDragEnd={(event) => handleSortEnd("bot", event, [...botStrategyItems].sort((left, right) => {
             const leftKey = `${left.controller.bot_name}:${left.controller.controller_id || left.controller.controller_name}`;
