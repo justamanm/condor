@@ -16,7 +16,7 @@ const SAFE_FIELDS = [
   "buy_trailing_rebound_adjustment_factor", "buy_trailing_rebound_max_percent",
   "sell_profit_multiple", "sell_price_max_usd", "sell_price_downward_tolerance_usd",
   "sell_trailing_drop_mode", "sell_trailing_drop_usd", "sell_trailing_drop_percent",
-  "normal_check_interval", "trailing_check_interval", "status_log_interval_seconds", "live_trading",
+  "normal_check_interval", "trailing_check_interval", "status_log_interval_seconds", "live_trading", "auto_start_next_cycle",
   "price_query_group",
 ] as const;
 
@@ -32,6 +32,7 @@ const FIELD_LABELS: Record<string, string> = {
   sell_trailing_drop_usd: "卖出回落固定值", sell_trailing_drop_percent: "卖出回落百分比",
   normal_check_interval: "普通检查间隔（秒）", trailing_check_interval: "跟踪检查间隔（秒）",
   status_log_interval_seconds: "状态日志间隔（秒）", live_trading: "真实交易",
+  auto_start_next_cycle: "卖出后自动开始下一轮",
   price_query_group: "报价分组",
 };
 
@@ -75,13 +76,14 @@ export function RuntimeConfigDialog({ open, server, botName, botDisplayName, con
     return found.controller_name === "microduck_profit_trailing" ? {
       buy_trailing_rebound_adjustment_factor: 0.5,
       buy_trailing_rebound_max_percent: 10,
+      auto_start_next_cycle: false,
       price_query_group: "",
       ...found,
     } : found;
   }, [configId, configQuery.data]);
   const fields = useMemo(() => {
     const order = [...MICRODUCK_DEPLOY_KEYS, ...SAFE_FIELDS.filter((key) => !MICRODUCK_DEPLOY_KEYS.has(key))];
-    return SAFE_FIELDS.filter((key) => config && (key in config || key === "price_query_group"))
+    return SAFE_FIELDS.filter((key) => config && (key in config || key === "price_query_group" || key === "auto_start_next_cycle"))
       .sort((a, b) => order.indexOf(a) - order.indexOf(b));
   }, [config]);
   useEffect(() => {

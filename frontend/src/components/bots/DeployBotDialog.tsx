@@ -34,7 +34,7 @@ export const HIDDEN_KEYS = new Set([
 ]);
 
 export const MICRODUCK_DEPLOY_KEYS = new Set([
-  "wallet_address", "live_trading", "buy_size_mode", "buy_budget_usd", "buy_amount_base", "buy_price_min_usd",
+  "wallet_address", "live_trading", "auto_start_next_cycle", "buy_size_mode", "buy_budget_usd", "buy_amount_base", "buy_price_min_usd",
   "buy_price_upward_tolerance_usd", "buy_trailing_rebound_mode",
   "buy_trailing_rebound_usd", "buy_trailing_rebound_percent",
   "buy_trailing_rebound_adjustment_factor", "buy_trailing_rebound_max_percent",
@@ -56,6 +56,7 @@ export const MICRODUCK_FIELD_INFO: Record<string, { label: string; description: 
   buy_trailing_rebound_max_percent: { label: "最大买入反弹比例", description: "原字段 buy_trailing_rebound_max_percent。动态增加后的反弹比例不会超过此值，10 表示 10%。" },
   wallet_address: { label: "交易钱包", description: "本次 Bot 使用的钱包地址。部署后不能在运行中修改。" },
   live_trading: { label: "真实交易", description: "开启后会实际提交链上买卖；关闭时只观察和记录，不会成交。" },
+  auto_start_next_cycle: { label: "卖出后自动开始下一轮", description: "开启后，卖出交易确认成功便自动回到等待买入；关闭时停留在本轮已完成状态。历史交易和累计利润都会保留。" },
   sell_price_max_usd: { label: "卖出价格上限", description: "可选。留空时只按利润倍数计算卖出目标；填写后，最终目标取计算值和此值中较低的一个。单位：美元。" },
   sell_price_downward_tolerance_usd: { label: "卖出向下容差", description: "允许最终卖出价低于触发点的最大金额。设置为 0 表示不额外放宽。单位：美元。" },
   sell_profit_multiple: { label: "卖出利润倍数", description: "根据实际买入价计算卖出目标。例如 1.5 表示目标价为买入价的 1.5 倍。" },
@@ -136,6 +137,7 @@ export function ConfigEditor({
           buy_amount_base: 1,
           buy_trailing_rebound_adjustment_factor: 0.5,
           buy_trailing_rebound_max_percent: 5,
+          auto_start_next_cycle: false,
           price_query_group: "",
           ...config,
         }
