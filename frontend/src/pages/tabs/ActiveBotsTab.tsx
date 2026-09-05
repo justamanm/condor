@@ -1504,7 +1504,7 @@ export function ActiveBotsTab({
       : estimatedSellLower;
     const displayedSellLower = usesFinalSellTargetTolerance ? estimatedSellLower : legacySellLower;
     const displayedSellUpper = usesFinalSellTargetTolerance ? estimatedSellUpper : legacySellLower;
-    // 涨跌幅和预计利润统一以未加减容差的配置目标价为基准。
+    // 涨跌幅和预期利润统一以未加减容差的配置目标价为基准。
     const expectedProfitBuyPrice = ["holding", "trailing", "selling"].includes(controllerState)
       && Number.isFinite(entryPrice) && entryPrice > 0
       ? entryPrice
@@ -1811,7 +1811,7 @@ export function ActiveBotsTab({
           valueColor={currentProfitComplete ? pnlColor(currentProfitUsd) : undefined}
         />
         <StatCard
-          label="预计总利润"
+          label="预期总利润"
           value={(
             <span>
               <span className="block text-base">{signedPercent(expectedProfitRate)}</span>
@@ -2027,7 +2027,7 @@ export function ActiveBotsTab({
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-[var(--color-text-muted)]">预计利润</div>
+                      <div className="text-xs text-[var(--color-text-muted)]">预期利润</div>
                       <div
                         className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums"
                         style={{ color: item.expectedProfitPercent === null ? "var(--color-text-muted)" : item.expectedProfitPercent >= 0 ? "var(--color-green)" : "var(--color-red)" }}
