@@ -67,14 +67,14 @@ export function BotFullLogsDialog({ server, botName, displayName, onClose }: {
   const latest = logsQuery.data?.pages[0];
 
   return <div
-    className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+    className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 py-4 backdrop-blur-sm"
     onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}
   >
     <div
-      className="flex h-[82vh] min-w-[min(720px,95vw)] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] shadow-2xl"
-      style={{ width: "min(1100px, 90vw)", resize: "horizontal" }}
+      className="flex h-[82vh] min-w-[min(720px,100vw)] max-w-[100vw] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] shadow-2xl"
+      style={{ width: "96vw", resize: "horizontal" }}
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex items-start justify-between border-b border-[var(--color-border)] px-5 py-4">
@@ -105,7 +105,7 @@ export function BotFullLogsDialog({ server, botName, displayName, onClose }: {
           </>}
         </div>
       </div>
-      <div className="flex-1 overflow-auto bg-[#111827] p-3 font-mono text-xs leading-5 text-slate-200">
+      <div className="flex-1 overflow-auto bg-[#111827] py-3 font-mono text-xs leading-5 text-slate-200">
         {logsQuery.isLoading ? <p className="text-slate-400">正在读取完整日志…</p>
           : logsQuery.isError ? <p className="text-red-400">{logsQuery.error instanceof Error ? logsQuery.error.message : "读取日志失败"}</p>
             : lines.length === 0 ? <p className="text-slate-400">没有匹配的日志。</p>
