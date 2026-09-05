@@ -1084,6 +1084,9 @@ async def get_bot_full_logs_endpoint(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=500, ge=1, le=2000),
     query: str = Query(default="", max_length=120),
+    category: str = Query(default="all", pattern="^(all|ordinary|buy_tracking|sell_tracking|quote|other)$"),
+    start_time: str | None = Query(default=None, max_length=40),
+    end_time: str | None = Query(default=None, max_length=40),
     user: WebUser = Depends(require_server_access),
 ):
     """Proxy paged persisted Bot logs from the selected Hummingbot server."""
@@ -1091,7 +1094,15 @@ async def get_bot_full_logs_endpoint(
     try:
         return await client.bot_orchestration._get(
             f"/bot-orchestration/bots/{bot_name}/full-logs",
-            params={"log_type": log_type, "offset": offset, "limit": limit, "query": query},
+            params={
+                "log_type": log_type,
+                "offset": offset,
+                "limit": limit,
+                "query": query,
+                "category": category,
+                "start_time": start_time,
+                "end_time": end_time,
+            },
         )
     except Exception as exc:
         logger.exception("Failed to read full logs for Bot '%s' on '%s'", bot_name, name)

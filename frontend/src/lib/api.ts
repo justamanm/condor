@@ -239,6 +239,8 @@ export interface BotFullLogsResponse {
   file_size: number;
 }
 
+export type BotLogCategory = "all" | "ordinary" | "buy_tracking" | "sell_tracking" | "quote" | "other";
+
 export interface BotSummary {
     bot_name: string;
   display_name?: string | null;
@@ -1514,9 +1516,18 @@ export const api = {
   getBot: (server: string, botId: string) =>
     apiFetch<BotDetail>(`/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botId)}`),
 
-  getBotFullLogs: (server: string, botName: string, logType: "main" | "system" | "error", offset = 0, query = "") =>
+  getBotFullLogs: (
+    server: string,
+    botName: string,
+    logType: "main" | "system" | "error",
+    offset = 0,
+    query = "",
+    category: BotLogCategory = "all",
+    startTime = "",
+    endTime = "",
+  ) =>
     apiFetch<BotFullLogsResponse>(
-      `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/full-logs?log_type=${encodeURIComponent(logType)}&offset=${offset}&limit=500&query=${encodeURIComponent(query)}`,
+      `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/full-logs?log_type=${encodeURIComponent(logType)}&offset=${offset}&limit=500&query=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`,
     ),
 
   getAvailableConfigs: (server: string) =>
