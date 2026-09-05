@@ -1044,6 +1044,8 @@ export function ActiveBotsTab({
   const [tradeNotificationPermission, setTradeNotificationPermission] = useState<NotificationPermission | "unsupported">(() =>
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported",
   );
+  const [notificationTestResult, setNotificationTestResult] = useState<{ text: string; error: boolean } | null>(null);
+  const [systemNotificationTestPending, setSystemNotificationTestPending] = useState(false);
   const seenTradeNotifications = useRef<Set<string>>(new Set());
   const tradeNotificationServer = useRef<string | null>(null);
   const tradeNotificationBaselineReady = useRef(false);
@@ -1243,6 +1245,59 @@ export function ActiveBotsTab({
       return;
     }
     setTradeNotificationPermission(await Notification.requestPermission());
+  }, []);
+
+  const testBrowserNotification = useCallback(async () => {
+    if (!("Notification" in window)) {
+      setTradeNotificationPermission("unsupported");
+      setNotificationTestResult({ text: "当前浏览器不支持网页通知。", error: true });
+      return;
+    }
+    let permission = Notification.permission;
+    if (permission === "default") permission = await Notification.requestPermission();
+    setTradeNotificationPermission(permission);
+    if (permission !== "granted") {
+      setNotificationTestResult({ text: "网页通知未获允许，请在网站权限中开启通知。", error: true });
+      return;
+    }
+    try {
+      new Notification("Microduck 网页通知测试", {
+        body: "网页通知工作正常；此类通知需要页面保持打开。",
+        tag: `microduck-browser-test-${Date.now()}`,
+      });
+      setNotificationTestResult({ text: "网页测试通知已发送。", error: false });
+    } catch (error) {
+      setNotificationTestResult({
+        text: error instanceof Error ? `网页通知失败：${error.message}` : "网页通知发送失败。",
+        error: true,
+      });
+    }
+  }, []);
+
+  const testSystemNotification = useCallback(async () => {
+    setSystemNotificationTestPending(true);
+    setNotificationTestResult(null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch("http://127.0.0.1:24873/test", {
+        method: "POST",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`后台程序返回 ${response.status}`);
+      setNotificationTestResult({ text: "Mac 系统测试通知已发送。", error: false });
+    } catch (error) {
+      const detail = error instanceof DOMException && error.name === "AbortError"
+        ? "连接超时"
+        : error instanceof Error ? error.message : "无法连接";
+      setNotificationTestResult({
+        text: `系统通知失败：${detail}。请检查 Mac 后台通知程序。`,
+        error: true,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+      setSystemNotificationTestPending(false);
+    }
   }, []);
 
   // 控制器的展示名可能是中文，而配置 ID 才包含 microduck；统一按多个可用字段识别。
@@ -1709,22 +1764,46 @@ export function ActiveBotsTab({
       <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-base font-semibold text-[var(--color-text)]">Bot 状态</h3>
-          {tradeNotificationPermission === "granted" ? (
-            <span className="inline-flex items-center gap-1 text-xs text-[var(--color-green)]" title="页面打开时，新确认的买入和卖出会发送浏览器通知">
-              <BellRing className="h-3.5 w-3.5" />成交通知已启用
-            </span>
-          ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {notificationTestResult && (
+              <span className={`text-xs ${notificationTestResult.error ? "text-[var(--color-red)]" : "text-[var(--color-green)]"}`}>
+                {notificationTestResult.text}
+              </span>
+            )}
+            {tradeNotificationPermission === "granted" ? (
+              <span className="inline-flex items-center gap-1 text-xs text-[var(--color-green)]" title="页面打开时，新确认的买入和卖出会发送浏览器通知">
+                <BellRing className="h-3.5 w-3.5" />成交通知已启用
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={requestTradeNotificationPermission}
+                disabled={tradeNotificationPermission === "unsupported" || tradeNotificationPermission === "denied"}
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
+                title={tradeNotificationPermission === "denied" ? "浏览器已阻止通知，请在网站权限设置中重新允许" : tradeNotificationPermission === "unsupported" ? "当前浏览器不支持系统通知" : "启用买入、卖出确认后的浏览器系统通知"}
+              >
+                <BellRing className="h-3.5 w-3.5" />
+                {tradeNotificationPermission === "denied" ? "成交通知已被阻止" : tradeNotificationPermission === "unsupported" ? "浏览器不支持通知" : "启用成交通知"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={requestTradeNotificationPermission}
-              disabled={tradeNotificationPermission === "unsupported" || tradeNotificationPermission === "denied"}
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
-              title={tradeNotificationPermission === "denied" ? "浏览器已阻止通知，请在网站权限设置中重新允许" : tradeNotificationPermission === "unsupported" ? "当前浏览器不支持系统通知" : "启用买入、卖出确认后的浏览器系统通知"}
+              onClick={testBrowserNotification}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              title="测试页面打开时使用的浏览器通知"
             >
-              <BellRing className="h-3.5 w-3.5" />
-              {tradeNotificationPermission === "denied" ? "成交通知已被阻止" : tradeNotificationPermission === "unsupported" ? "浏览器不支持通知" : "启用成交通知"}
+              <BellRing className="h-3.5 w-3.5" />测试网页通知
             </button>
-          )}
+            <button
+              type="button"
+              onClick={testSystemNotification}
+              disabled={systemNotificationTestPending}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:cursor-wait disabled:opacity-60"
+              title="测试关闭网页后仍由 Mac 后台程序发送的系统通知"
+            >
+              <BellRing className="h-3.5 w-3.5" />{systemNotificationTestPending ? "正在测试…" : "测试系统通知"}
+            </button>
+          </div>
         </div>
         {botStrategyItems.length ? (
           <DndContext sensors={sortableSensors} collisionDetection={closestCenter} onDragEnd={(event) => handleSortEnd("bot", event, [...botStrategyItems].sort((left, right) => {
