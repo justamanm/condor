@@ -152,14 +152,18 @@ export function ConfigEditor({
   const effectiveBuyMode = String(
     edits.buy_size_mode ?? editableConfig.buy_size_mode ?? "budget",
   ) as BuySizeMode;
+  const hasPriceQueryGroup = Boolean(String(
+    edits.price_query_group ?? editableConfig.price_query_group ?? "",
+  ).trim());
   const entries = useMemo(
     () => Object.entries(editableConfig).filter(([key]) =>
       !HIDDEN_KEYS.has(key) &&
-      (!isMicroduck || MICRODUCK_DEPLOY_KEYS.has(key)),
+      (!isMicroduck || MICRODUCK_DEPLOY_KEYS.has(key)) &&
+      (!hasPriceQueryGroup || !["normal_check_interval", "buy_trailing_check_interval"].includes(key)),
     ).sort(([a], [b]) => isMicroduck
       ? [...MICRODUCK_DEPLOY_KEYS].indexOf(a) - [...MICRODUCK_DEPLOY_KEYS].indexOf(b)
       : 0),
-    [editableConfig, effectiveBuyMode, isMicroduck],
+    [editableConfig, effectiveBuyMode, hasPriceQueryGroup, isMicroduck],
   );
 
   const walletsQuery = useQuery({
@@ -240,7 +244,14 @@ export function ConfigEditor({
   }, [edits, configId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = useCallback((key: string, value: string) => {
-    setEdits((prev) => ({ ...prev, [key]: value }));
+    setEdits((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === "price_query_group" && value.trim()) {
+        delete next.normal_check_interval;
+        delete next.buy_trailing_check_interval;
+      }
+      return next;
+    });
     if (key === "buy_size_mode" || key === "buy_budget_usd" || key === "buy_amount_base") {
       setConversionMessage(null);
     }

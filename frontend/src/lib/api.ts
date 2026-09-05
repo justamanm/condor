@@ -643,6 +643,8 @@ export interface ControllerConfigDetail {
 export interface PriceQueryGroup {
   name: string;
   normalized_name: string;
+  normal_check_interval: number;
+  buy_trailing_check_interval: number;
   reference_count: number;
   references: Array<{ config_id: string; bot_name?: string | null; display_name?: string | null }>;
 }
@@ -1510,14 +1512,14 @@ export const api = {
   getPriceQueryGroups: (server: string) =>
     apiFetch<{ items: PriceQueryGroup[] }>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups`),
 
-  createPriceQueryGroup: (server: string, name: string) =>
+  createPriceQueryGroup: (server: string, name: string, normalCheckInterval = 4, buyTrailingCheckInterval = 1) =>
     apiFetch<PriceQueryGroup>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups`, {
-      method: "POST", body: JSON.stringify({ name }),
+      method: "POST", body: JSON.stringify({ name, normal_check_interval: normalCheckInterval, buy_trailing_check_interval: buyTrailingCheckInterval }),
     }),
 
-  renamePriceQueryGroup: (server: string, currentName: string, name: string) =>
+  renamePriceQueryGroup: (server: string, currentName: string, name: string, normalCheckInterval: number, buyTrailingCheckInterval: number) =>
     apiFetch<{ group: PriceQueryGroup }>(`/api/v1/servers/${encodeURIComponent(server)}/price-query-groups/${encodeURIComponent(currentName)}`, {
-      method: "PUT", body: JSON.stringify({ name }),
+      method: "PUT", body: JSON.stringify({ name, normal_check_interval: normalCheckInterval, buy_trailing_check_interval: buyTrailingCheckInterval }),
     }),
 
   deletePriceQueryGroup: (server: string, name: string) =>

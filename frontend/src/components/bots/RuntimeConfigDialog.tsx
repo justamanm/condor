@@ -86,11 +86,15 @@ export function RuntimeConfigDialog({ open, server, botName, botDisplayName, con
       ...found,
     } : found;
   }, [configId, configQuery.data]);
+  const hasPriceQueryGroup = Boolean(String(
+    edits.price_query_group ?? config?.price_query_group ?? "",
+  ).trim());
   const fields = useMemo(() => {
     const order = [...MICRODUCK_DEPLOY_KEYS, ...SAFE_FIELDS.filter((key) => !MICRODUCK_DEPLOY_KEYS.has(key))];
     return SAFE_FIELDS.filter((key) => config && (key in config || key === "price_query_group" || key === "auto_start_next_cycle"))
+      .filter((key) => !hasPriceQueryGroup || !["normal_check_interval", "buy_trailing_check_interval"].includes(key))
       .sort((a, b) => order.indexOf(a) - order.indexOf(b));
-  }, [config]);
+  }, [config, hasPriceQueryGroup]);
   useEffect(() => {
     setPendingApply(null);
     if (open) { setEdits({}); setSavedMessage(""); }
@@ -186,7 +190,14 @@ export function RuntimeConfigDialog({ open, server, botName, botDisplayName, con
                       {info && <span className="group relative inline-flex shrink-0"><CircleHelp className="h-3 w-3" /><span className="pointer-events-none absolute bottom-full left-0 z-30 mb-1 hidden w-64 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2 text-xs leading-5 shadow-lg group-hover:block">{info.description}<span className="block text-[10px]">原字段名：{key}</span></span></span>}
                     </div>
                     {!applicable ? <input id={`runtime-${key}`} disabled value="不适用" className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)] opacity-60 cursor-not-allowed" />
-                      : key === "price_query_group" ? <PriceQueryGroupSelect server={server} value={value} disabled={pendingApply !== null || mutation.isPending} onChange={(nextValue) => setEdits((previous) => ({ ...previous, price_query_group: nextValue }))} />
+                      : key === "price_query_group" ? <PriceQueryGroupSelect server={server} value={value} disabled={pendingApply !== null || mutation.isPending} onChange={(nextValue) => setEdits((previous) => {
+                        const next: Record<string, string> = { ...previous, price_query_group: nextValue };
+                        if (nextValue.trim()) {
+                          delete next.normal_check_interval;
+                          delete next.buy_trailing_check_interval;
+                        }
+                        return next;
+                      })} />
                       : ["buy_size_mode", "buy_trailing_rebound_mode", "sell_trailing_drop_mode"].includes(key) ? <select id={`runtime-${key}`} value={value} onChange={(event) => setEdits((previous) => ({ ...previous, [key]: event.target.value }))} className={`w-full rounded-md border bg-[var(--color-surface)] px-3 py-2 text-xs outline-none focus:border-[var(--color-primary)] ${inputBorder}`}>{(key === "buy_size_mode" ? [["budget", "按预算"], ["quantity", "按数量"]] : [["percentage", "按百分比"], ["fixed", "按固定金额"]]).map(([option, text]) => <option key={option} value={option}>{text}</option>)}</select>
                       : type === "boolean" ? <button type="button" onClick={() => setEdits((previous) => ({ ...previous, [key]: String(value !== "true") }))} className={`flex w-full items-center gap-2 rounded-md border bg-[var(--color-surface)] px-3 py-2 text-sm ${inputBorder}`}><span className={`flex h-4 w-4 items-center justify-center rounded border ${value === "true" ? "border-[var(--color-primary)] bg-[var(--color-primary)]" : "border-[var(--color-border)]"}`}>{value === "true" && <Check className="h-3 w-3 text-white" />}</span>{value === "true" ? "已开启" : "已关闭"}</button>
                       : <div className="relative w-full"><input type={type === "number" ? "number" : "text"} step={type === "number" ? "any" : undefined} value={value} placeholder={key === "sell_price_max_usd" ? "不设置（按利润倍数）" : undefined} onChange={(event) => setEdits((previous) => ({ ...previous, [key]: event.target.value }))} className={`w-full rounded-md border bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] ${unit ? "pr-28" : ""} ${inputBorder}`} />{unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-[var(--color-text-muted)]">{unit}</span>}</div>}
