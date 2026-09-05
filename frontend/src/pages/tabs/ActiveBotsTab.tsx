@@ -1551,6 +1551,9 @@ export function ActiveBotsTab({
     };
     const actualBuyPrice = latestTradePrice("BUY");
     const actualSellPrice = latestTradePrice("SELL");
+    const pricesAreFromPreviousCycle = controllerState === "waiting_to_buy"
+      && validManagedAmount === 0
+      && (actualBuyPrice !== null || actualSellPrice !== null);
     const tradeVolume = (side: "BUY" | "SELL") => tradeHistory.reduce((total, trade) => {
       if (String(trade.side ?? "").toUpperCase() !== side) return total;
       const value = Number(trade.total_usd);
@@ -1576,6 +1579,7 @@ export function ActiveBotsTab({
       configuredBuySize,
       actualBuyPrice,
       actualSellPrice,
+      pricesAreFromPreviousCycle,
       summary,
       configuredBuyPriceRange: formatStrategyPriceRange(configuredBuyPrice, configuredBuyPriceUpper),
       configuredBuyPriceUpper,
@@ -1863,8 +1867,8 @@ export function ActiveBotsTab({
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">买入卖出价格</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold leading-5 tabular-nums text-[var(--color-text)]">
-                        <div>{item.actualBuyPrice === null ? "-" : `${currencySymbol}${item.actualBuyPrice.toFixed(6)}`}</div>
-                        <div>{item.actualSellPrice === null ? "-" : `${currencySymbol}${item.actualSellPrice.toFixed(6)}`}</div>
+                        <div>{item.actualBuyPrice === null ? "-" : `${currencySymbol}${item.actualBuyPrice.toFixed(6)}${item.pricesAreFromPreviousCycle ? "（上次）" : ""}`}</div>
+                        <div>{item.actualSellPrice === null ? "-" : `${currencySymbol}${item.actualSellPrice.toFixed(6)}${item.pricesAreFromPreviousCycle ? "（上次）" : ""}`}</div>
                       </div>
                     </div>
                     <div>
