@@ -1154,6 +1154,20 @@ export function ActiveBotsTab({
     }
   }, [server, walletBalances, walletBalancesUpdatedAt]);
 
+  useEffect(() => {
+    const ethUsdPrice = Number(walletBalances?.prices?.ETH);
+    void fetch("http://127.0.0.1:24873/notification-context", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wallet_aliases: walletAliases,
+        eth_usd_price: Number.isFinite(ethUsdPrice) && ethUsdPrice > 0 ? ethUsdPrice : null,
+      }),
+    }).catch(() => {
+      // 后台通知未安装时不影响页面；“测试系统通知”按钮会显示明确错误。
+    });
+  }, [walletAliases, walletBalances?.prices?.ETH]);
+
   // Compute earliest deploy time from active bots for filtering perf history
   const earliestDeploy = useMemo(() => {
     if (!data?.bots?.length) return undefined;
@@ -1220,7 +1234,11 @@ export function ActiveBotsTab({
       seenTradeNotifications.current.clear();
       tradeNotificationBaselineReady.current = false;
     }
-    const notifications = browserTradeNotifications(controllers);
+    const ethUsdPrice = Number(walletBalances?.prices?.ETH);
+    const notifications = browserTradeNotifications(controllers, {
+      walletAliases,
+      ethUsdPrice: Number.isFinite(ethUsdPrice) && ethUsdPrice > 0 ? ethUsdPrice : null,
+    });
     if (!tradeNotificationBaselineReady.current) {
       notifications.forEach((item) => seenTradeNotifications.current.add(item.key));
       tradeNotificationBaselineReady.current = true;
@@ -1237,7 +1255,7 @@ export function ActiveBotsTab({
         }
       }
     }
-  }, [controllers, data, server]);
+  }, [controllers, data, server, walletAliases, walletBalances?.prices?.ETH]);
 
   const requestTradeNotificationPermission = useCallback(async () => {
     if (!("Notification" in window)) {
@@ -1261,8 +1279,15 @@ export function ActiveBotsTab({
       return;
     }
     try {
-      new Notification("Microduck 网页通知测试", {
-        body: "网页通知工作正常；此类通知需要页面保持打开。",
+      new Notification("测试 Bot · 买入成功", {
+        body: [
+          "500 MICRODUCK × $0.023919",
+          "实际支出：11.959500 USDG",
+          "",
+          "钱包：钱包-a（…a5336）",
+          "买入后持仓：500 MICRODUCK",
+          "Gas：0.00002600 ETH（约 $0.060000）",
+        ].join("\n"),
         tag: `microduck-browser-test-${Date.now()}`,
       });
       setNotificationTestResult({ text: "网页测试通知已发送。", error: false });
