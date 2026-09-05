@@ -17,7 +17,15 @@ export function NotificationSettings() {
     const next = { ...settings, [key]: enabled };
     setSettings(next);
     saveTradeNotificationSettings(next);
-    setMessage(key === "browserEnabled" ? "网页通知设置已保存。" : "正在保存系统通知设置…");
+    if (key === "browserEnabled") {
+      setMessage("网页通知设置已保存。");
+      return;
+    }
+    if (key === "showBotCharts") {
+      setMessage("Bot 页面显示设置已保存。");
+      return;
+    }
+    setMessage("正在保存系统通知设置…");
     if (key === "systemEnabled") {
       try {
         await syncSystemNotificationSettings(next);
@@ -83,9 +91,16 @@ export function NotificationSettings() {
 
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-[var(--color-text)]">成交通知</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">分别控制网页通知和关闭页面后仍可接收的 Mac 系统通知。</p>
+      <div className="flex min-h-11 items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--color-text)]">成交通知</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">分别控制网页通知和关闭页面后仍可接收的 Mac 系统通知。</p>
+        </div>
+        {message && (
+          <p className="shrink-0 pt-0.5 text-right text-sm text-[var(--color-text-muted)]" role="status">
+            {message}
+          </p>
+        )}
       </div>
       <div className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
         {rows.map(({ key, title, description, icon: Icon }) => (
@@ -112,8 +127,6 @@ export function NotificationSettings() {
           <BellRing className="h-4 w-4" />{systemTestPending ? "正在测试…" : "测试系统通知"}
         </button>
       </div>
-      {message && <p className="text-sm text-[var(--color-text-muted)]">{message}</p>}
-
       <div className="border-t border-[var(--color-border)] pt-5">
         <h2 className="text-base font-semibold text-[var(--color-text)]">Bot 页面显示</h2>
         <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4">
