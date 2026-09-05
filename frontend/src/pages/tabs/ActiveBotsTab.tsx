@@ -1814,6 +1814,17 @@ export function ActiveBotsTab({
                     <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
+                        onClick={() => setRuntimeConfigTarget({
+                          botName: item.controller.bot_name,
+                          botDisplayName: item.controller.bot_display_name,
+                          configId: item.controller.controller_id || item.controller.controller_name,
+                        })}
+                        className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                      >
+                        <Settings className="h-3 w-3" />调整配置
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => item.walletAddress && setWalletLedgerTarget({
                           address: item.walletAddress,
                           ethUsdPrice: Number.isFinite(Number(walletBalances?.prices?.ETH)) && Number(walletBalances?.prices?.ETH) > 0
@@ -1829,17 +1840,6 @@ export function ActiveBotsTab({
                       >
                         <ReceiptText className="h-3 w-3" />交易记录
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setRuntimeConfigTarget({
-                          botName: item.controller.bot_name,
-                          botDisplayName: item.controller.bot_display_name,
-                          configId: item.controller.controller_id || item.controller.controller_name,
-                        })}
-                        className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                      >
-                        <Settings className="h-3 w-3" />调整配置
-                      </button>
                       <span
                         className="whitespace-nowrap rounded-full bg-[var(--color-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--color-text)]"
                         title={String(item.tradeState)}
@@ -1852,7 +1852,7 @@ export function ActiveBotsTab({
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">当前持仓</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text)]">
-                        {item.managedAmount.toFixed(6)} MICRODUCK
+                        {item.managedAmount.toFixed(1)} MICRODUCK
                       </div>
                       <div className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
                         {item.managedValueUsd === null
