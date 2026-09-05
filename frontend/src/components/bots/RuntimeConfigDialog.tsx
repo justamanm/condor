@@ -77,7 +77,7 @@ export function RuntimeConfigDialog({ open, server, botName, botDisplayName, con
     );
     if (!found) return found;
     return found.controller_name === "microduck_profit_trailing" ? {
-      buy_trailing_check_interval: found.buy_trailing_check_interval ?? found.trailing_check_interval ?? 2,
+      buy_trailing_check_interval: found.buy_trailing_check_interval ?? found.trailing_check_interval ?? 1,
       sell_trailing_check_interval: found.sell_trailing_check_interval ?? found.trailing_check_interval ?? 2,
       buy_trailing_rebound_adjustment_factor: 0.5,
       buy_trailing_rebound_max_percent: 10,
