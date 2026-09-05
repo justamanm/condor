@@ -49,6 +49,7 @@ import { formatCurrencyVolume, pnlColor } from "@/lib/formatters";
 import { controllerStrategySummary } from "@/lib/controller-strategy-summary";
 import { latestPositionPrice } from "@/lib/latest-position-price";
 import { browserTradeNotifications } from "@/lib/trade-browser-notifications";
+import { readTradeNotificationSettings } from "@/lib/trade-notification-settings";
 import { configDisplayInfo } from "@/lib/config-display";
 
 function formatUptime(deployedAt: string | null): string {
@@ -1046,6 +1047,7 @@ export function ActiveBotsTab({
   );
   const [notificationTestResult, setNotificationTestResult] = useState<{ text: string; error: boolean } | null>(null);
   const [systemNotificationTestPending, setSystemNotificationTestPending] = useState(false);
+  const notificationSettings = readTradeNotificationSettings();
   const seenTradeNotifications = useRef<Set<string>>(new Set());
   const tradeNotificationServer = useRef<string | null>(null);
   const tradeNotificationBaselineReady = useRef(false);
@@ -1162,6 +1164,7 @@ export function ActiveBotsTab({
       body: JSON.stringify({
         wallet_aliases: walletAliases,
         eth_usd_price: Number.isFinite(ethUsdPrice) && ethUsdPrice > 0 ? ethUsdPrice : null,
+        system_notifications_enabled: notificationSettings.systemEnabled,
       }),
     }).catch(() => {
       // 后台通知未安装时不影响页面；“测试系统通知”按钮会显示明确错误。
@@ -1247,7 +1250,7 @@ export function ActiveBotsTab({
     for (const item of notifications) {
       if (seenTradeNotifications.current.has(item.key)) continue;
       seenTradeNotifications.current.add(item.key);
-      if ("Notification" in window && Notification.permission === "granted") {
+      if (notificationSettings.browserEnabled && "Notification" in window && Notification.permission === "granted") {
         try {
           new Notification(item.title, { body: item.body, tag: item.key });
         } catch {
@@ -1601,6 +1604,15 @@ export function ActiveBotsTab({
     const tradeHistory = Array.isArray(custom.trade_history)
       ? custom.trade_history as Record<string, unknown>[]
       : [];
+    const latestTradePrice = (side: "BUY" | "SELL") => {
+      const latest = [...tradeHistory]
+        .filter((trade) => String(trade.side ?? "").toUpperCase() === side)
+        .sort((left, right) => String(right.timestamp ?? "").localeCompare(String(left.timestamp ?? "")))[0];
+      const price = Number(latest?.price_usd ?? latest?.unit_price_usd);
+      return Number.isFinite(price) && price > 0 ? price : null;
+    };
+    const actualBuyPrice = latestTradePrice("BUY");
+    const actualSellPrice = latestTradePrice("SELL");
     const tradeVolume = (side: "BUY" | "SELL") => tradeHistory.reduce((total, trade) => {
       if (String(trade.side ?? "").toUpperCase() !== side) return total;
       const value = Number(trade.total_usd);
@@ -1624,6 +1636,8 @@ export function ActiveBotsTab({
       controller,
       buyMode,
       configuredBuySize,
+      actualBuyPrice,
+      actualSellPrice,
       summary,
       configuredBuyPriceRange: formatStrategyPriceRange(configuredBuyPrice, configuredBuyPriceUpper),
       configuredBuyPriceUpper,
@@ -1914,7 +1928,7 @@ export function ActiveBotsTab({
                       </span>
                     </div>
                   </div>
-                  <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[repeat(11,minmax(0,1fr))] 2xl:[&>div+div]:border-l 2xl:[&>div+div]:border-[var(--color-border)] 2xl:[&>div+div]:pl-5 2xl:[&>div:nth-child(2)]:pl-8">
+                  <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[repeat(12,minmax(0,1fr))] 2xl:[&>div+div]:border-l 2xl:[&>div+div]:border-[var(--color-border)] 2xl:[&>div+div]:pl-5 2xl:[&>div:nth-child(2)]:pl-8">
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">当前持仓</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text)]">
@@ -1929,6 +1943,10 @@ export function ActiveBotsTab({
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">{item.buyMode === "quantity" ? "配置买入数量" : "配置买入预算"}</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text)]">{item.configuredBuySize}</div>
+                    </div>
+                    <div className="mt-1 whitespace-nowrap text-sm font-bold leading-5 tabular-nums text-[var(--color-text)]">
+                      <div>买入价格：{item.actualBuyPrice === null ? "-" : `${currencySymbol}${item.actualBuyPrice.toFixed(6)}`}</div>
+                      <div>卖出价格：{item.actualSellPrice === null ? "-" : `${currencySymbol}${item.actualSellPrice.toFixed(6)}`}</div>
                     </div>
                     <div>
                       <div className="text-xs text-[var(--color-text-muted)]">配置买入价格</div>

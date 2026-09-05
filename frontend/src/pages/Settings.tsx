@@ -6,6 +6,7 @@ import { AdminSettings } from "@/components/settings/AdminSettings";
 import { ApiKeysSettings } from "@/components/settings/ApiKeysSettings";
 import { CustomProvidersSettings } from "@/components/settings/CustomProvidersSettings";
 import { GatewaySettings } from "@/components/settings/GatewaySettings";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { ServersSettings } from "@/components/settings/ServersSettings";
 import { SharingSettings } from "@/components/settings/SharingSettings";
 import { TelemetrySettings } from "@/components/settings/TelemetrySettings";
@@ -20,6 +21,7 @@ const TABS = [
   { key: "llm", label: "LLM Endpoints" },
   { key: "voice", label: "Voice & AI" },
   { key: "privacy", label: "Privacy" },
+  { key: "notifications", label: "通知" },
 ] as const;
 
 /** Admin-only, appended to TABS when the user turns out to be an admin (ARCH-177). */
@@ -83,6 +85,7 @@ export function Settings() {
       {tab === "keys" && <ApiKeysSettings />}
       {tab === "llm" && <CustomProvidersSettings />}
       {tab === "voice" && <VoiceSettings />}
+      {tab === "notifications" && <NotificationSettings />}
       {/* Two cards, not one switch. Telemetry is anonymous counts the admin
           consents to install-wide; sharing is content only its author can hand
           over. They are different promises, and merging the controls would
