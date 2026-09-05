@@ -67,6 +67,7 @@ export interface PortfolioResponse {
 export interface GatewayWalletBalance {
   address: string;
   balances: Record<string, string> | null;
+  configuredApprovals?: Record<string, string>;
   error: string | null;
 }
 
@@ -81,6 +82,7 @@ export interface GatewayWalletBalancesResponse {
 export interface GatewayWalletAllowancesResponse {
   spender: string;
   approvals: Record<string, string>;
+  configuredApprovals?: Record<string, string>;
 }
 
 export interface GatewayWalletApprovalResponse {

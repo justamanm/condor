@@ -43,6 +43,7 @@ import {
   type ControllerPerformanceSnapshot,
   type ControllerConfigSummary,
   type GatewayWalletBalancesResponse,
+  type GatewayWalletBalance,
   type GatewayWalletAllowancesResponse,
 } from "@/lib/api";
 import { formatCurrencyVolume, pnlColor } from "@/lib/formatters";
@@ -123,7 +124,10 @@ function readWalletBalanceCache(server: string | null): WalletBalanceCacheEntry 
     if (!cached || !Number.isFinite(savedAt) || Date.now() - savedAt > WALLET_BALANCE_CACHE_MAX_AGE) {
       return undefined;
     }
-    return Array.isArray(cached.data?.wallets) ? { data: cached.data, savedAt } : undefined;
+    const wallets = cached.data?.wallets;
+    const currentSchema = Array.isArray(wallets)
+      && wallets.every((wallet: GatewayWalletBalance) => Object.prototype.hasOwnProperty.call(wallet, "configuredApprovals"));
+    return currentSchema ? { data: cached.data, savedAt } : undefined;
   } catch {
     return undefined;
   }
@@ -1626,17 +1630,12 @@ export function ActiveBotsTab({
     botName: string;
     controllerId: string;
   }>();
-  const walletApprovalPlanFailures = new Set<string>();
   for (const item of botStrategyItems) {
-    if (!item.walletAddress) continue;
+    if (!item.walletAddress || item.expectedInvestmentUsd === null) continue;
     const controllerState = String(item.controller.custom_info?.state ?? "").toLowerCase();
-    // 只有明确结束的 Bot 释放配置额度；运行中的持仓、跟踪和卖出状态仍保留它们的额度。
-    if (["completed", "external_exit"].includes(controllerState)) continue;
+    // 已买入的 Bot 当前不再需要 USDG；只为未来还可能买入的 Bot 预留额度。
+    if (["holding", "trailing", "selling", "completed", "external_exit"].includes(controllerState)) continue;
     const key = item.walletAddress.toLowerCase();
-    if (item.expectedInvestmentUsd === null) {
-      walletApprovalPlanFailures.add(key);
-      continue;
-    }
     const previous = walletApprovalPlans.get(key);
     walletApprovalPlans.set(key, {
       expectedInvestmentUsd: (previous?.expectedInvestmentUsd ?? 0) + item.expectedInvestmentUsd,
@@ -1672,15 +1671,21 @@ export function ActiveBotsTab({
       : null;
     const addressKey = wallet.address.toLowerCase();
     const approvalPlan = walletApprovalPlans.get(addressKey);
-    const usdgAllowance = usdgAllowanceByWallet.get(addressKey) ?? null;
+    const remainingUsdgAllowance = usdgAllowanceByWallet.get(addressKey) ?? null;
+    const configuredUsdgAllowanceRaw = wallet.configuredApprovals?.USDG;
+    const configuredUsdgAllowance = Number(configuredUsdgAllowanceRaw);
+    const usdgAllowance = configuredUsdgAllowanceRaw !== undefined && Number.isFinite(configuredUsdgAllowance)
+      ? configuredUsdgAllowance
+      : null;
     // 授权为同一钱包共享：已占用是所有仍可能买入的 Bot 的计划投入；
     // 可用额度只表示还能分配给其他 Bot 的授权，不代表钱包实际 USDG 余额。
-    const occupiedAllowance = walletApprovalPlanFailures.has(addressKey)
+    const reservedAllowance = approvalPlan?.expectedInvestmentUsd ?? 0;
+    const availableAllowance = remainingUsdgAllowance === null
       ? null
-      : approvalPlan?.expectedInvestmentUsd ?? 0;
-    const availableAllowance = usdgAllowance === null || occupiedAllowance === null
+      : Math.max(0, remainingUsdgAllowance - reservedAllowance);
+    const occupiedAllowance = usdgAllowance === null || availableAllowance === null
       ? null
-      : Math.max(0, usdgAllowance - occupiedAllowance);
+      : Math.max(0, usdgAllowance - availableAllowance);
     return {
       ...wallet,
       microduck: validMicroduck,
@@ -1692,6 +1697,7 @@ export function ActiveBotsTab({
       usdgValue: convertedUsdg?.converted ? convertedUsdg.value : null,
       total,
       usdgAllowance,
+      remainingUsdgAllowance,
       occupiedAllowance,
       availableAllowance,
       approvalPlan,
@@ -2085,7 +2091,7 @@ export function ActiveBotsTab({
                       <div className="whitespace-nowrap text-xs text-[var(--color-text-muted)]">USDG 总授权额度</div>
                       <div className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text)]">
                         {wallet.usdgAllowance === null
-                          ? "暂未获取"
+                          ? wallet.remainingUsdgAllowance !== null && wallet.remainingUsdgAllowance <= 0 ? "未设置" : "获取失败"
                           : wallet.usdgAllowance <= 0
                             ? "未设置"
                             : `${wallet.usdgAllowance.toFixed(6)} USDG`}
@@ -2094,7 +2100,7 @@ export function ActiveBotsTab({
                         已占用额度 {wallet.occupiedAllowance === null ? "获取失败" : `${wallet.occupiedAllowance.toFixed(6)} USDG`}
                       </div>
                       <div className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
-                        可用额度 {wallet.occupiedAllowance === null ? "获取失败" : wallet.availableAllowance === null ? "暂未获取" : `${wallet.availableAllowance.toFixed(6)} USDG`}
+                        可用额度 {wallet.availableAllowance === null ? "获取失败" : `${wallet.availableAllowance.toFixed(6)} USDG`}
                       </div>
                       <UsdgAllowanceEditor
                         server={server}
