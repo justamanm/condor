@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 import yaml
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from condor.controller_configs import clean_config_for_save
 from condor.fetchers.bots import build_bots_page, extract_bots_list
@@ -1074,6 +1074,28 @@ async def restart_bot_endpoint(
 
     await refresh_bot_activity_cache(name, bot_name)
     return result
+
+
+@router.get("/servers/{name}/bots/{bot_name}/full-logs")
+async def get_bot_full_logs_endpoint(
+    name: str,
+    bot_name: str,
+    log_type: str = Query(default="main", pattern="^(main|system|error)$"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=2000),
+    query: str = Query(default="", max_length=120),
+    user: WebUser = Depends(require_server_access),
+):
+    """Proxy paged persisted Bot logs from the selected Hummingbot server."""
+    client = await get_config_manager().get_client(name)
+    try:
+        return await client.bot_orchestration._get(
+            f"/bot-orchestration/bots/{bot_name}/full-logs",
+            params={"log_type": log_type, "offset": offset, "limit": limit, "query": query},
+        )
+    except Exception as exc:
+        logger.exception("Failed to read full logs for Bot '%s' on '%s'", bot_name, name)
+        raise upstream_error("读取 Bot 完整日志失败", exc)
 
 
 @router.post("/servers/{name}/bots/{bot_name}/controllers/stop")

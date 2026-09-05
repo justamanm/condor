@@ -229,6 +229,16 @@ export interface BotLogEntry {
   [key: string]: unknown;
 }
 
+export interface BotFullLogsResponse {
+  bot_name: string;
+  log_type: "main" | "system" | "error";
+  lines: Array<{ number: number; text: string }>;
+  total_lines: number;
+  next_offset: number;
+  has_more: boolean;
+  file_size: number;
+}
+
 export interface BotSummary {
     bot_name: string;
   display_name?: string | null;
@@ -1503,6 +1513,11 @@ export const api = {
 
   getBot: (server: string, botId: string) =>
     apiFetch<BotDetail>(`/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botId)}`),
+
+  getBotFullLogs: (server: string, botName: string, logType: "main" | "system" | "error", offset = 0, query = "") =>
+    apiFetch<BotFullLogsResponse>(
+      `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/full-logs?log_type=${encodeURIComponent(logType)}&offset=${offset}&limit=500&query=${encodeURIComponent(query)}`,
+    ),
 
   getAvailableConfigs: (server: string) =>
     apiFetch<AvailableControllersResponse>(

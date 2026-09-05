@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ReceiptText,
   RotateCw,
+  ScrollText,
   Pencil,
   Settings,
   Square,
@@ -24,6 +25,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { NoServerCard } from "@/components/NoServerCard";
 import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
 import { BuyTrackingChart } from "@/components/bots/BuyTrackingChart";
+import { BotFullLogsDialog } from "@/components/bots/BotFullLogsDialog";
 import { ControllerBrowser } from "@/components/bots/ControllerBrowser";
 import { ControllerTradingActivity } from "@/components/bots/ControllerTradingActivity";
 import { PnlSparkline } from "@/components/bots/PnlSparkline";
@@ -503,6 +505,7 @@ function ControllerRow({
 
 function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSummary; server: string; onStopInitiated?: (botName: string) => void; onStopSettled?: (botName: string) => void }) {
   const [showLogs, setShowLogs] = useState(false);
+  const [showFullLogs, setShowFullLogs] = useState(false);
   const [pendingAction, setPendingAction] = useState<"remove" | null>(null);
   const [editingAlias, setEditingAlias] = useState(false);
   const [aliasInput, setAliasInput] = useState(bot.display_name || "");
@@ -590,6 +593,7 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
         <span className="text-[var(--color-text-muted)]">
           {bot.num_controllers} controller{bot.num_controllers !== 1 ? "s" : ""}
         </span>
+        <button type="button" onClick={(event) => { event.stopPropagation(); setShowFullLogs(true); }} className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10" title="查看该 Bot 落盘的完整日志"><ScrollText className="h-3.5 w-3.5" />查看完整日志</button>
         {bot.error_count > 0 && (
           <span className="text-[var(--color-yellow)] text-xs">
             {bot.error_count} error{bot.error_count !== 1 ? "s" : ""}
@@ -659,6 +663,7 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
       {aliasMutation.isError && (
         <div className="px-4 py-2 text-xs text-[var(--color-red)]">保存别名失败：{aliasMutation.error instanceof Error ? aliasMutation.error.message : "未知错误"}</div>
       )}
+      {showFullLogs && <BotFullLogsDialog server={server} botName={bot.bot_name} displayName={displayedBotName} onClose={() => setShowFullLogs(false)} />}
     </div>
   );
 }
